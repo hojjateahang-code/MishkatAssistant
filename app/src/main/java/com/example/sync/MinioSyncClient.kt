@@ -29,9 +29,9 @@ object MinioSyncClient {
 
     fun getPrefix(): String = ServerConfigManager.getMinioPrefix()
 
-    private fun getAccessKey(): String = ServerConfigManager.getMinioAccessKey()
+    private fun getAccessKey(): String = ServerConfigManager.getMinioAccessKey().trim().replace("\u200B", "").replace("\u200C", "").replace("\u200D", "")
 
-    private fun getSecretKey(): String = ServerConfigManager.getMinioSecretKey()
+    private fun getSecretKey(): String = ServerConfigManager.getMinioSecretKey().trim().replace("\u200B", "").replace("\u200C", "").replace("\u200D", "")
 
     data class DiagnosticResult(
         val isSuccess: Boolean,
