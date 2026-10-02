@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.data.FinancialTransactionEntity
 import com.example.ui.components.AddFinancialTransactionDialog
+import java.util.Locale
 import com.example.ui.components.ImageViewerModal
 import com.example.viewmodel.AppViewModel
 
@@ -115,11 +116,11 @@ fun FinancialAuditScreen(
                     ) {
                         Column {
                             Text("مجموع درآمدها (ورودی):", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text("$totalIncome ریال", fontWeight = FontWeight.Bold, color = Color(0xFF10B981), style = MaterialTheme.typography.titleMedium)
+                            Text("${String.format(Locale.US, "%,d", totalIncome)} ریال", fontWeight = FontWeight.Bold, color = Color(0xFF10B981), style = MaterialTheme.typography.titleMedium)
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text("مجموع هزینه‌ها (خروجی):", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text("$totalExpense ریال", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
+                            Text("${String.format(Locale.US, "%,d", totalExpense)} ریال", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
                         }
                     }
 
@@ -134,7 +135,7 @@ fun FinancialAuditScreen(
                     ) {
                         Text("مانده نهایی حساب:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = "$balance ریال",
+                            text = "${String.format(Locale.US, "%,d", balance)} ریال",
                             fontWeight = FontWeight.Bold,
                             color = if (balance >= 0) Color(0xFF10B981) else MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.titleLarge
@@ -206,7 +207,7 @@ fun FinancialAuditScreen(
                             }
 
                             Text(
-                                text = "${tx.amount} ریال",
+                                text = "${String.format(Locale.US, "%,d", tx.amount)} ریال",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = if (isIncome) Color(0xFF10B981) else MaterialTheme.colorScheme.error

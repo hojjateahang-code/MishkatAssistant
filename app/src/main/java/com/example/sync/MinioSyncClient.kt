@@ -53,6 +53,104 @@ object MinioSyncClient {
         "NOM0zd28HIkjZM7fcNKegOwa4N8GhwqmkocOi1ES"
     }
 
+    data class DiagnosticResult(
+        val isSuccess: Boolean,
+        val endpoint: String,
+        val bucket: String,
+        val latencyMs: Long,
+        val httpCode: Int,
+        val message: String,
+        val details: String
+    )
+
+    /**
+     * Runs full connection diagnostic test against MinIO server with AWS SigV4
+     */
+    suspend fun runConnectionDiagnostic(): DiagnosticResult = withContext(Dispatchers.IO) {
+        val startTime = System.currentTimeMillis()
+        val endpoint = getEndpoint()
+        val bucket = getBucket()
+        val prefix = getPrefix().trimStart('/')
+        val testUrlStr = "$endpoint/$bucket/$prefix"
+
+        try {
+            val url = URL(testUrlStr)
+            val host = url.host
+            val canonicalUri = url.path.ifBlank { "/" }
+
+            val payloadHash = sha256Hex(ByteArray(0))
+
+            val now = Date()
+            val amzFormat = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val dateFormat = SimpleDateFormat("yyyyMMdd", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val amzDate = amzFormat.format(now)
+            val dateStamp = dateFormat.format(now)
+
+            val region = "us-east-1"
+            val service = "s3"
+            val signedHeaders = "host;x-amz-content-sha256;x-amz-date"
+            val canonicalHeaders = "host:$host\nx-amz-content-sha256:$payloadHash\nx-amz-date:$amzDate\n"
+
+            val canonicalRequest = "GET\n$canonicalUri\n\n$canonicalHeaders\n$signedHeaders\n$payloadHash"
+            val credentialScope = "$dateStamp/$region/$service/aws4_request"
+            val stringToSign = "AWS4-HMAC-SHA256\n$amzDate\n$credentialScope\n${sha256Hex(canonicalRequest.toByteArray(Charsets.UTF_8))}"
+
+            val signingKey = getSignatureKey(getSecretKey(), dateStamp, region, service)
+            val signature = hex(hmacSha256(signingKey, stringToSign))
+
+            val authHeader = "AWS4-HMAC-SHA256 Credential=${getAccessKey()}/$credentialScope, SignedHeaders=$signedHeaders, Signature=$signature"
+
+            val request = Request.Builder()
+                .url(testUrlStr)
+                .get()
+                .addHeader("host", host)
+                .addHeader("x-amz-date", amzDate)
+                .addHeader("x-amz-content-sha256", payloadHash)
+                .addHeader("Authorization", authHeader)
+                .build()
+
+            val response = client.newCall(request).execute()
+            val latency = System.currentTimeMillis() - startTime
+            val code = response.code
+            val isSuccess = response.isSuccessful || code == 200 || code == 404 // 404 means server reached and authenticated, just key not found yet
+
+            val respBodyPreview = response.body?.string()?.take(300) ?: ""
+
+            val msg = if (isSuccess) {
+                "اتصال با موفقیت برقرار شد. سرور در دسترس و احراز هویت SigV4 تایید گردید."
+            } else if (code == 403) {
+                "دسترسی رد شد (۴۰۳ Forbidden). احتمالاً AccessKey یا SecretKey اشتباه است."
+            } else {
+                "خطای سرور با کد HTTP $code"
+            }
+
+            DiagnosticResult(
+                isSuccess = isSuccess,
+                endpoint = endpoint,
+                bucket = bucket,
+                latencyMs = latency,
+                httpCode = code,
+                message = msg,
+                details = "پاسخ سرور ($code): $respBodyPreview"
+            )
+        } catch (e: Exception) {
+            val latency = System.currentTimeMillis() - startTime
+            DiagnosticResult(
+                isSuccess = false,
+                endpoint = endpoint,
+                bucket = bucket,
+                latencyMs = latency,
+                httpCode = -1,
+                message = "عدم برقراری ارتباط با شبکه یا خطای DNS: ${e.localizedMessage}",
+                details = e.stackTraceToString().take(400)
+            )
+        }
+    }
+
     /**
      * Uploads the backup JSON payload to MinIO using AWS SigV4
      */

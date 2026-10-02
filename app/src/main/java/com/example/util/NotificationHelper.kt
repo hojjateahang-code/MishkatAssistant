@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
@@ -21,13 +23,24 @@ class ReminderReceiver : BroadcastReceiver() {
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channelId = "mishkat_reminders_channel"
+        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                .build()
+
             val channel = NotificationChannel(
                 channelId,
                 "یادآورهای دستیار مشکاه",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "کانال اعلان‌های برنامه‌ریزی و یادآورها"
+                description = "کانال اعلان‌های برنامه‌ریزی، آلارم و یادآورها"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500)
+                setSound(soundUri, audioAttributes)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -47,7 +60,12 @@ class ReminderReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title)
             .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVibrate(longArrayOf(0, 500, 200, 500))
+            .setSound(soundUri)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 
@@ -81,7 +99,21 @@ object NotificationHelper {
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        timeInMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        timeInMillis,
+                        pendingIntent
+                    )
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     timeInMillis,
@@ -92,6 +124,28 @@ object NotificationHelper {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    fun scheduleReminderWithEarlyAlert(
+        context: Context,
+        taskId: Int,
+        title: String,
+        message: String,
+        timeInMillis: Long,
+        earlyReminderHours: Int = 0
+    ) {
+        // 1. Schedule exact event alarm
+        scheduleReminder(context, taskId, title, message, timeInMillis)
+
+        // 2. Schedule early alert alarm if requested (e.g. 24 or 48 hours before)
+        if (earlyReminderHours > 0) {
+            val earlyTime = timeInMillis - (earlyReminderHours * 3600 * 1000L)
+            if (earlyTime > System.currentTimeMillis()) {
+                val earlyTitle = "یادآوری زودهنگام ($earlyReminderHours ساعت مانده): $title"
+                val earlyMsg = "موعد برنامه: $message"
+                scheduleReminder(context, taskId + 100000, earlyTitle, earlyMsg, earlyTime)
+            }
         }
     }
 
@@ -107,5 +161,10 @@ object NotificationHelper {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             alarmManager.cancel(pendingIntent)
         }
+    }
+
+    fun cancelReminderWithEarlyAlert(context: Context, taskId: Int) {
+        cancelReminder(context, taskId)
+        cancelReminder(context, taskId + 100000)
     }
 }

@@ -26,7 +26,7 @@ object GeminiAssistantService {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "your_api_key_here") {
             return@withContext Result.failure(
-                IllegalStateException("کلید API جمینای تنظیم نشده است. لطفاً کلید API را در پانل Secrets تنظیم کنید.")
+                IllegalStateException("کلید API جمینای تنظیم نشده است. لطفاً کلید معتبر را در فایل .env یا تنظیمات وارد نمایید.")
             )
         }
 
@@ -95,9 +95,25 @@ object GeminiAssistantService {
                     val candContent = firstCand.optJSONObject("content")
                     val candParts = candContent?.optJSONArray("parts")
                     if (candParts != null && candParts.length() > 0) {
-                        val text = candParts.getJSONObject(0).optString("text", "")
-                        if (text.isNotBlank()) {
-                            return@withContext Result.success(text)
+                        val textBuilder = StringBuilder()
+                        for (i in 0 until candParts.length()) {
+                            val part = candParts.getJSONObject(i)
+                            // Skip internal thought parts if present
+                            if (!part.optBoolean("thought", false)) {
+                                val t = part.optString("text", "")
+                                if (t.isNotBlank()) {
+                                    textBuilder.append(t).append("\n")
+                                }
+                            }
+                        }
+                        val finalText = textBuilder.toString().trim()
+                        if (finalText.isNotBlank()) {
+                            return@withContext Result.success(finalText)
+                        } else {
+                            val fallbackText = candParts.getJSONObject(candParts.length() - 1).optString("text", "")
+                            if (fallbackText.isNotBlank()) {
+                                return@withContext Result.success(fallbackText)
+                            }
                         }
                     }
                 }

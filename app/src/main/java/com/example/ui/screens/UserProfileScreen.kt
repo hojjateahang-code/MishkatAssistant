@@ -41,6 +41,9 @@ fun UserProfileScreen(
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
+    var isTestingMinio by remember { mutableStateOf(false) }
+    var diagnosticResult by remember { mutableStateOf<MinioSyncClient.DiagnosticResult?>(null) }
+    var showDiagnosticDialog by remember { mutableStateOf(false) }
 
     val howzehConfig = workplaceConfigs.firstOrNull { it.workplace == "HOWZEH" }
     val mosqueConfig = workplaceConfigs.firstOrNull { it.workplace == "MOSQUE" }
@@ -354,6 +357,31 @@ fun UserProfileScreen(
                                 Text("بازیابی از ابر")
                             }
                         }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        FilledTonalButton(
+                            onClick = {
+                                isTestingMinio = true
+                                viewModel.runMinioDiagnostic { result ->
+                                    isTestingMinio = false
+                                    diagnosticResult = result
+                                    showDiagnosticDialog = true
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("minio_diagnostic_button"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isTestingMinio) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("در حال بررسی سرور و امضای AWS SigV4...")
+                            } else {
+                                Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("تست، عیب‌یابی و پینگ اتصال MinIO")
+                            }
+                        }
                     }
                 }
             }
@@ -451,40 +479,79 @@ fun UserProfileScreen(
         )
     }
 
-    // Workplace Config Hours Dialog
+    // Workplace Config Hours Dialog (Supports 30-min increments)
     if (showConfigDialog) {
-        var howzehHours by remember { mutableStateOf((howzehConfig?.targetDailyMinutes ?: 240) / 60) }
-        var mosqueHours by remember { mutableStateOf((mosqueConfig?.targetDailyMinutes ?: 180) / 60) }
+        var howzehMins by remember(howzehConfig) { mutableIntStateOf(howzehConfig?.targetDailyMinutes ?: 240) }
+        var mosqueMins by remember(mosqueConfig) { mutableIntStateOf(mosqueConfig?.targetDailyMinutes ?: 180) }
 
         AlertDialog(
             onDismissRequest = { showConfigDialog = false },
-            title = { Text("تنظیم ساعات موظفی روزانه") },
+            title = { Text("تنظیم ساعات موظفی روزانه (گام‌های ۳۰ دقیقه‌ای)", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("ساعات موظفی حوزه علمیه: $howzehHours ساعت در روز")
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Howzeh
+                    val hH = howzehMins / 60
+                    val hM = howzehMins % 60
+                    val hText = if (hM > 0) "$hH ساعت و $hM دقیقه (${hH + 0.5f} ساعت)" else "$hH ساعت"
+                    Text("ساعات موظفی حوزه علمیه: $hText", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalButton(onClick = { if (howzehMins >= 60) howzehMins -= 30 }) {
+                            Text("- ۳۰ دقیقه")
+                        }
+                        FilledTonalButton(onClick = { if (howzehMins <= 720) howzehMins += 30 }) {
+                            Text("+ ۳۰ دقیقه")
+                        }
+                    }
                     Slider(
-                        value = howzehHours.toFloat(),
-                        onValueChange = { howzehHours = it.toInt() },
-                        valueRange = 1f..12f,
-                        steps = 10
+                        value = howzehMins.toFloat(),
+                        onValueChange = {
+                            howzehMins = (Math.round(it / 30f) * 30).toInt().coerceIn(30, 720)
+                        },
+                        valueRange = 30f..720f,
+                        steps = 22
                     )
 
-                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider()
 
-                    Text("ساعات موظفی مسجد: $mosqueHours ساعت در روز")
+                    // Mosque
+                    val mH = mosqueMins / 60
+                    val mM = mosqueMins % 60
+                    val mText = if (mM > 0) "$mH ساعت و $mM دقیقه (${mH + 0.5f} ساعت)" else "$mH ساعت"
+                    Text("ساعات موظفی مسجد: $mText", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalButton(onClick = { if (mosqueMins >= 60) mosqueMins -= 30 }) {
+                            Text("- ۳۰ دقیقه")
+                        }
+                        FilledTonalButton(onClick = { if (mosqueMins <= 720) mosqueMins += 30 }) {
+                            Text("+ ۳۰ دقیقه")
+                        }
+                    }
                     Slider(
-                        value = mosqueHours.toFloat(),
-                        onValueChange = { mosqueHours = it.toInt() },
-                        valueRange = 1f..12f,
-                        steps = 10
+                        value = mosqueMins.toFloat(),
+                        onValueChange = {
+                            mosqueMins = (Math.round(it / 30f) * 30).toInt().coerceIn(30, 720)
+                        },
+                        valueRange = 30f..720f,
+                        steps = 22
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.updateWorkplaceConfig("HOWZEH", howzehHours * 60)
-                        viewModel.updateWorkplaceConfig("MOSQUE", mosqueHours * 60)
+                        viewModel.updateWorkplaceConfig("HOWZEH", howzehMins)
+                        viewModel.updateWorkplaceConfig("MOSQUE", mosqueMins)
                         showConfigDialog = false
                     }
                 ) {
@@ -494,6 +561,70 @@ fun UserProfileScreen(
             dismissButton = {
                 TextButton(onClick = { showConfigDialog = false }) {
                     Text("انصراف")
+                }
+            }
+        )
+    }
+
+    // MinIO Connection Diagnostic Modal
+    if (showDiagnosticDialog && diagnosticResult != null) {
+        val res = diagnosticResult!!
+        AlertDialog(
+            onDismissRequest = { showDiagnosticDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (res.isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
+                        contentDescription = null,
+                        tint = if (res.isSuccess) Color(0xFF10B981) else MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("نتیجه عیب‌یابی اتصال به MinIO", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        color = if (res.isSuccess) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = res.message,
+                            fontWeight = FontWeight.Bold,
+                            color = if (res.isSuccess) Color(0xFF065F46) else Color(0xFF991B1B),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+
+                    Text("آدرس سرور: ${res.endpoint}", style = MaterialTheme.typography.bodySmall)
+                    Text("باکت هدف: ${res.bucket}", style = MaterialTheme.typography.bodySmall)
+                    Text("زمان پاسخگویی (Latency): ${res.latencyMs} میلی‌ثانیه", style = MaterialTheme.typography.bodySmall)
+                    Text("کد وضعیت HTTP: ${if (res.httpCode != -1) res.httpCode else "عدم دسترسی شبکه"}", style = MaterialTheme.typography.bodySmall)
+
+                    Spacer(Modifier.height(4.dp))
+                    Text("جزئیات سیستمی پاسخ:", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = res.details,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.DarkGray,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showDiagnosticDialog = false }) {
+                    Text("متوجه شدم")
                 }
             }
         )

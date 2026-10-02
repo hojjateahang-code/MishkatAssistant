@@ -29,6 +29,8 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.rememberAsyncImagePainter
 import com.example.util.JalaliCalendar
 import java.util.Calendar
+import java.util.Locale
+import androidx.compose.foundation.lazy.items
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +50,7 @@ fun AddActivityDialog(
         "#برنامه‌های_قرآنی",
         "#امور_فرهنگی",
         "#تدریس",
+        "#مطالعه_تدریس",
         "#پوستر_و_تبلیغات",
         "#جلسات_و_شوراها",
         "#پاسخگویی_شرعی",
@@ -125,6 +128,21 @@ fun AddActivityDialog(
                     singleLine = true
                 )
 
+                if (workplace == "HOWZEH" && (selectedTag.contains("تدریس") || title.contains("تدریس"))) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "توجه: در حوزه علمیه، مدت زمان تدریس (۱ ساعت) و مطالعه برای تدریس جزء ساعت موظفی حوزه محسوب نشده و از زمان حضور کسر می‌گردد.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
@@ -156,21 +174,44 @@ fun AddActivityDialog(
 
 @Composable
 fun AddTaskReminderDialog(
+    initialDate: com.example.util.JalaliCalendar.JalaliDate = com.example.util.JalaliCalendar.getTodayJalali(),
     onDismiss: () -> Unit,
-    onConfirm: (title: String, desc: String, workplace: String, dueDateMillis: Long, priority: String, tag: String) -> Unit
+    onConfirm: (title: String, desc: String, workplace: String, dueDateMillis: Long, jalaliDateStr: String, priority: String, tag: String, earlyReminderHours: Int) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
     var workplace by remember { mutableStateOf("ALL") }
     var priority by remember { mutableStateOf("MEDIUM") }
-    var categoryTag by remember { mutableStateOf("#عمومی") }
+    var categoryTag by remember { mutableStateOf("#برنامه‌های_قرآنی") }
 
-    var selectedHour by remember { mutableStateOf(10) }
-    var selectedMinute by remember { mutableStateOf(0) }
+    var selectedYear by remember { mutableIntStateOf(initialDate.year) }
+    var selectedMonth by remember { mutableIntStateOf(initialDate.month) }
+    var selectedDay by remember { mutableIntStateOf(initialDate.day) }
+
+    var selectedHour by remember { mutableIntStateOf(10) }
+    var selectedMinute by remember { mutableIntStateOf(0) }
+    var earlyReminderHours by remember { mutableIntStateOf(48) } // پیش‌فرض: ۲ روز قبل
+
+    val taskTags = listOf(
+        "#برنامه‌های_قرآنی", "#امور_فرهنگی", "#تدریس", "#مطالعه_تدریس",
+        "#جلسات", "#مراسم_و_مناسبت‌ها", "#پاسخ_به_شبهات", "#تجهیزات", "#عمومی"
+    )
+
+    val earlyAlertOptions = listOf(
+        Pair(0, "همان موقع (بدون پیش‌هشدار)"),
+        Pair(1, "۱ ساعت قبل"),
+        Pair(12, "۱۲ ساعت قبل"),
+        Pair(24, "۱ روز قبل (۲۴ ساعت)"),
+        Pair(48, "۲ روز قبل (۴۸ ساعت)"),
+        Pair(72, "۳ روز قبل (۷۲ ساعت)")
+    )
+
+    val maxDays = com.example.util.JalaliCalendar.getDaysInJalaliMonth(selectedYear, selectedMonth)
+    if (selectedDay > maxDays) selectedDay = maxDays
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ایجاد یادآور / کار جدید", fontWeight = FontWeight.Bold) },
+        title = { Text("ایجاد یادآور با آلارم و تقویم", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -194,7 +235,101 @@ fun AddTaskReminderDialog(
                     minLines = 2
                 )
 
-                Text("مربوط به:", style = MaterialTheme.typography.bodyMedium)
+                // Date Selection
+                Text("تاریخ موعد در تقویم:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Day Selector
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("روز ($selectedDay)", style = MaterialTheme.typography.labelSmall)
+                        Slider(
+                            value = selectedDay.toFloat(),
+                            onValueChange = { selectedDay = it.toInt() },
+                            valueRange = 1f..maxDays.toFloat(),
+                            steps = (maxDays - 2).coerceAtLeast(0)
+                        )
+                    }
+
+                    // Month Selector
+                    Column(modifier = Modifier.weight(1.2f)) {
+                        val mName = com.example.util.JalaliCalendar.monthNames.getOrElse(selectedMonth - 1) { "" }
+                        Text("ماه ($mName)", style = MaterialTheme.typography.labelSmall)
+                        Slider(
+                            value = selectedMonth.toFloat(),
+                            onValueChange = { selectedMonth = it.toInt() },
+                            valueRange = 1f..12f,
+                            steps = 10
+                        )
+                    }
+                }
+
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "تاریخ انتخابی: $selectedDay ${com.example.util.JalaliCalendar.monthNames.getOrElse(selectedMonth - 1) { "" }} $selectedYear",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+
+                // Time Selection
+                Text("ساعت هشدار:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("ساعت: ${String.format("%02d", selectedHour)}", style = MaterialTheme.typography.labelSmall)
+                        Slider(
+                            value = selectedHour.toFloat(),
+                            onValueChange = { selectedHour = it.toInt() },
+                            valueRange = 0f..23f,
+                            steps = 22
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("دقیقه: ${String.format("%02d", selectedMinute)}", style = MaterialTheme.typography.labelSmall)
+                        Slider(
+                            value = selectedMinute.toFloat(),
+                            onValueChange = { selectedMinute = it.toInt() },
+                            valueRange = 0f..55f,
+                            steps = 10
+                        )
+                    }
+                }
+
+                // Pre-Alarm Option
+                Text("پیش‌هشدار و آلارم زودهنگام سیستم:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    earlyAlertOptions.forEach { opt ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { earlyReminderHours = opt.first }
+                                .padding(vertical = 2.dp)
+                        ) {
+                            RadioButton(
+                                selected = earlyReminderHours == opt.first,
+                                onClick = { earlyReminderHours = opt.first }
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(opt.second, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                // Workplace
+                Text("مربوط به:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = workplace == "HOWZEH",
@@ -213,7 +348,8 @@ fun AddTaskReminderDialog(
                     )
                 }
 
-                Text("اولیت:", style = MaterialTheme.typography.bodyMedium)
+                // Priority
+                Text("اولویت:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = priority == "HIGH",
@@ -231,19 +367,51 @@ fun AddTaskReminderDialog(
                         label = { Text("پایین") }
                     )
                 }
+
+                // Tag Selection
+                Text("دسته‌بندی و هشتگ:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(taskTags) { tag ->
+                            FilterChip(
+                                selected = categoryTag == tag,
+                                onClick = { categoryTag = tag },
+                                label = { Text(tag) }
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val cal = Calendar.getInstance()
-                    cal.add(Calendar.HOUR_OF_DAY, 1) // Default 1 hour from now
+                    val cal = com.example.util.JalaliCalendar.jalaliToGregorian(selectedYear, selectedMonth, selectedDay)
+                    cal.set(Calendar.HOUR_OF_DAY, selectedHour)
+                    cal.set(Calendar.MINUTE, selectedMinute)
+                    cal.set(Calendar.SECOND, 0)
+                    cal.set(Calendar.MILLISECOND, 0)
+
                     val dueDateMillis = cal.timeInMillis
-                    onConfirm(title.ifBlank { "یادآور کار" }, desc, workplace, dueDateMillis, priority, categoryTag)
+                    val dateStr = String.format("%04d/%02d/%02d", selectedYear, selectedMonth, selectedDay)
+
+                    onConfirm(
+                        title.ifBlank { "یادآور کار" },
+                        desc,
+                        workplace,
+                        dueDateMillis,
+                        dateStr,
+                        priority,
+                        categoryTag,
+                        earlyReminderHours
+                    )
                 },
                 modifier = Modifier.testTag("submit_add_task_button")
             ) {
-                Text("ذخیره یادآور")
+                Text("ذخیره و تنظیم آلارم")
             }
         },
         dismissButton = {
@@ -327,10 +495,29 @@ fun AddFinancialTransactionDialog(
                     }
                 }
 
+                val parsedAmount = com.example.util.JalaliCalendar.fromPersianDigits(amountText).replace(",", "").toLongOrNull() ?: 0L
+
                 OutlinedTextField(
                     value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text("مبلغ به ریال (مثال: ۵۰۰۰۰۰۰)") },
+                    onValueChange = { input ->
+                        val cleanDigits = com.example.util.JalaliCalendar.fromPersianDigits(input).filter { it.isDigit() }
+                        if (cleanDigits.isBlank()) {
+                            amountText = ""
+                        } else {
+                            val num = cleanDigits.toLongOrNull()
+                            amountText = if (num != null) String.format(Locale.US, "%,d", num) else cleanDigits
+                        }
+                    },
+                    label = { Text("مبلغ به ریال (جداکننده سه‌رقمی خودکار)") },
+                    supportingText = {
+                        if (parsedAmount > 0) {
+                            Text(
+                                text = "معادل: ${String.format(Locale.US, "%,d", parsedAmount / 10)} تومان  |  ${String.format(Locale.US, "%,d", parsedAmount)} ریال",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth().testTag("financial_amount_input"),
                     singleLine = true
@@ -424,7 +611,7 @@ fun AddFinancialTransactionDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val amount = amountText.toLongOrNull() ?: 0L
+                    val amount = com.example.util.JalaliCalendar.fromPersianDigits(amountText).replace(",", "").toLongOrNull() ?: 0L
                     onConfirm(workplace, type, amount, category, accountSource, desc, attachmentUri?.toString(), refNum, partyName)
                 },
                 modifier = Modifier.testTag("submit_financial_tx_button")

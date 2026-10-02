@@ -36,7 +36,8 @@ data class TaskReminderEntity(
     val jalaliDateStr: String,
     val isCompleted: Boolean = false,
     val priority: String = "MEDIUM", // "HIGH", "MEDIUM", "LOW"
-    val categoryTag: String = "#عمومی"
+    val categoryTag: String = "#عمومی",
+    val earlyReminderHours: Int = 0 // 0 = on time, 24 = 1 day, 48 = 2 days before, etc.
 )
 
 @Entity(tableName = "financial_transactions")

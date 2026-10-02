@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -327,31 +328,118 @@ fun ActivityTrackerScreen(
 
     // Start Timer Modal Dialog
     if (showStartTimerDialog) {
+        val categories = listOf(
+            "تدریس (کسر ۱ ساعت از موظفی حوزه)",
+            "مطالعه برای تدریس (کسر از موظفی حوزه)",
+            "طراحی و تبلیغات",
+            "امور قرآنی و حلقه‌ها",
+            "مشاوره و پاسخ به شبهات",
+            "امور اداری و اجرایی",
+            "نماز جماعت و منبر",
+            "سایر"
+        )
+        val suggestedHashtags = listOf(
+            "#تدریس", "#مطالعه_تدریس", "#پوستر", "#تبلیغات",
+            "#فقه", "#اصول", "#حلقه_صالحین", "#مشاوره", "#نماز_جماعت"
+        )
+        var selectedCategory by remember { mutableStateOf(categories[0]) }
+
         AlertDialog(
             onDismissRequest = { showStartTimerDialog = false },
             title = { Text("تنظیم زمان‌گیری زنده", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     OutlinedTextField(
                         value = newLiveTaskTitle,
                         onValueChange = { newLiveTaskTitle = it },
-                        label = { Text("عنوان فعالیت (مثلاً: آماده‌سازی پوستر شهدا)") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("عنوان فعالیت (مثلاً: تدریس فقه / مطالعه لمعه)") },
+                        modifier = Modifier.fillMaxWidth().testTag("live_timer_title_input"),
                         singleLine = true
                     )
 
-                    Text("محل انجام:", style = MaterialTheme.typography.bodyMedium)
+                    Text("محل انجام فعالیت:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = newLiveTaskWorkplace == "MOSQUE",
-                            onClick = { newLiveTaskWorkplace = "MOSQUE" },
-                            label = { Text("مسجد") }
-                        )
                         FilterChip(
                             selected = newLiveTaskWorkplace == "HOWZEH",
                             onClick = { newLiveTaskWorkplace = "HOWZEH" },
                             label = { Text("حوزه علمیه") }
                         )
+                        FilterChip(
+                            selected = newLiveTaskWorkplace == "MOSQUE",
+                            onClick = { newLiveTaskWorkplace = "MOSQUE" },
+                            label = { Text("مسجد") }
+                        )
+                    }
+
+                    Text("دسته‌بندی موضوعی:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        categories.forEach { cat ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedCategory = cat
+                                        if (cat.contains("تدریس") && !cat.contains("مطالعه")) {
+                                            newLiveTaskTag = "#تدریس"
+                                        } else if (cat.contains("مطالعه")) {
+                                            newLiveTaskTag = "#مطالعه_تدریس"
+                                        }
+                                    }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                RadioButton(
+                                    selected = selectedCategory == cat,
+                                    onClick = {
+                                        selectedCategory = cat
+                                        if (cat.contains("تدریس") && !cat.contains("مطالعه")) {
+                                            newLiveTaskTag = "#تدریس"
+                                        } else if (cat.contains("مطالعه")) {
+                                            newLiveTaskTag = "#مطالعه_تدریس"
+                                        }
+                                    }
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(cat, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+
+                    Text("هشتگ اختصاصی:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(
+                        value = newLiveTaskTag,
+                        onValueChange = { newLiveTaskTag = it },
+                        label = { Text("هشتگ دلخواه (مثال: #تدریس یا #پوستر)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(suggestedHashtags) { h ->
+                            FilterChip(
+                                selected = newLiveTaskTag == h,
+                                onClick = { newLiveTaskTag = h },
+                                label = { Text(h, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+
+                    if (newLiveTaskWorkplace == "HOWZEH" && (newLiveTaskTag.contains("تدریس") || selectedCategory.contains("تدریس"))) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "توجه: در حوزه علمیه، مدت زمان تدریس (۱ ساعت) و مطالعه برای تدریس جزء ساعت موظفی حوزه محسوب نشده و از زمان حضور کسر می‌گردد.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
                     }
                 }
             },
@@ -362,7 +450,7 @@ fun ActivityTrackerScreen(
                         viewModel.startLiveTaskTimer(
                             workplace = newLiveTaskWorkplace,
                             title = newLiveTaskTitle.ifBlank { "فعالیت در حال انجام" },
-                            tag = newLiveTaskTag
+                            tag = newLiveTaskTag.ifBlank { "#عمومی" }
                         )
                     }
                 ) {

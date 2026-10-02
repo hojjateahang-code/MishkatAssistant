@@ -65,6 +65,7 @@ data class BackupPackage(
             obj.put("isCompleted", t.isCompleted)
             obj.put("priority", t.priority)
             obj.put("categoryTag", t.categoryTag)
+            obj.put("earlyReminderHours", t.earlyReminderHours)
             taskArr.put(obj)
         }
         root.put("tasks", taskArr)
@@ -183,7 +184,8 @@ data class BackupPackage(
                             jalaliDateStr = o.optString("jalaliDateStr", ""),
                             isCompleted = o.optBoolean("isCompleted", false),
                             priority = o.optString("priority", "MEDIUM"),
-                            categoryTag = o.optString("categoryTag", "#عمومی")
+                            categoryTag = o.optString("categoryTag", "#عمومی"),
+                            earlyReminderHours = o.optInt("earlyReminderHours", 0)
                         )
                     )
                 }

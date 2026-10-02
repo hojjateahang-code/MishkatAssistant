@@ -15,6 +15,7 @@ import com.example.sync.BackupPackage
 import com.example.sync.MinioSyncClient
 import com.example.util.JalaliCalendar
 import com.example.util.NotificationHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,6 +86,106 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _syncStatusMessage = MutableStateFlow<String?>(null)
     val syncStatusMessage = _syncStatusMessage.asStateFlow()
 
+    private var autoSyncJob: Job? = null
+
+    fun triggerAutoCloudSync() {
+        autoSyncJob?.cancel()
+        autoSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(3000) // 3 seconds debounce
+            try {
+                val punches = punchDao.getAllPunchLogsOnce()
+                val activities = activityDao.getAllActivitiesOnce()
+                val tasks = taskDao.getAllTasksOnce()
+                val transactions = financialDao.getAllTransactionsOnce()
+                val configs = configDao.getAllConfigsOnce()
+                val profile = profileDao.getUserProfileOnce()
+
+                val backup = BackupPackage(
+                    version = 1,
+                    timestamp = System.currentTimeMillis(),
+                    jalaliDate = JalaliCalendar.getTodayJalali().toString(),
+                    punches = punches,
+                    activities = activities,
+                    tasks = tasks,
+                    transactions = transactions,
+                    configs = configs,
+                    profile = profile
+                )
+                MinioSyncClient.uploadBackup(backup.toJsonString())
+            } catch (e: Exception) {
+                // Silently ignore background periodic upload
+            }
+        }
+    }
+
+    init {
+        // Initial boot sync & connection check
+        viewModelScope.launch {
+            try {
+                delay(1500) // slight delay for DB init
+                _syncStatusMessage.value = "اتصال و بررسی سرور MinIO..."
+                val downloadResult = MinioSyncClient.downloadLatestBackup()
+                if (downloadResult.isSuccess) {
+                    val jsonStr = downloadResult.getOrThrow()
+                    val backup = BackupPackage.fromJsonString(jsonStr)
+                    val punchesCount = punchDao.getAllPunchLogsOnce().size
+                    val txCount = financialDao.getAllTransactionsOnce().size
+                    val actCount = activityDao.getAllActivitiesOnce().size
+
+                    if (punchesCount == 0 && txCount == 0 && actCount == 0) {
+                        if (backup.punches.isNotEmpty() || backup.transactions.isNotEmpty() || backup.activities.isNotEmpty()) {
+                            punchDao.insertAll(backup.punches)
+                            activityDao.insertAll(backup.activities)
+                            taskDao.insertAll(backup.tasks)
+                            financialDao.insertAll(backup.transactions)
+                            if (backup.configs.isNotEmpty()) configDao.insertAll(backup.configs)
+                            backup.profile?.let { profileDao.insertOrUpdateProfile(it) }
+                            _syncStatusMessage.value = "داده‌ها با موفقیت از سرور MinIO بازیابی شدند."
+                        } else {
+                            _syncStatusMessage.value = "اتصال برقرار شد - سرور آماده همگام‌سازی است."
+                        }
+                    } else {
+                        _syncStatusMessage.value = "سرور ابری MinIO متصل و آماده است."
+                    }
+                } else {
+                    _syncStatusMessage.value = "حالت آفلاین فعال است (سرور MinIO موقتاً در دسترس نیست)."
+                }
+            } catch (e: Exception) {
+                _syncStatusMessage.value = "حالت آفلاین محلی فعال است."
+            }
+
+            // Periodic auto-sync loop (every 5 minutes)
+            while (true) {
+                delay(5 * 60 * 1000L) // 5 minutes
+                try {
+                    val punches = punchDao.getAllPunchLogsOnce()
+                    val activities = activityDao.getAllActivitiesOnce()
+                    val tasks = taskDao.getAllTasksOnce()
+                    val transactions = financialDao.getAllTransactionsOnce()
+                    val configs = configDao.getAllConfigsOnce()
+                    val profile = profileDao.getUserProfileOnce()
+
+                    if (punches.isNotEmpty() || activities.isNotEmpty() || transactions.isNotEmpty()) {
+                        val backup = BackupPackage(
+                            version = 1,
+                            timestamp = System.currentTimeMillis(),
+                            jalaliDate = JalaliCalendar.getTodayJalali().toString(),
+                            punches = punches,
+                            activities = activities,
+                            tasks = tasks,
+                            transactions = transactions,
+                            configs = configs,
+                            profile = profile
+                        )
+                        MinioSyncClient.uploadBackup(backup.toJsonString())
+                    }
+                } catch (e: Exception) {
+                    // Silently ignore background periodic network issues
+                }
+            }
+        }
+    }
+
     // Selected Calendar Date
     private val _selectedDate = MutableStateFlow(JalaliCalendar.getTodayJalali())
     val selectedDate = _selectedDate.asStateFlow()
@@ -144,6 +245,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             )
             _activeTimerState.value = ActiveTimerState()
             timerJob?.cancel()
+            triggerAutoCloudSync()
         }
     }
 
@@ -166,6 +268,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     note = note
                 )
             )
+            triggerAutoCloudSync()
         }
     }
 
@@ -179,6 +282,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     note = updatedNote
                 )
             )
+            triggerAutoCloudSync()
         }
     }
 
@@ -199,12 +303,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     note = note
                 )
             )
+            triggerAutoCloudSync()
         }
     }
 
     fun deletePunch(punch: PunchLogEntity) {
         viewModelScope.launch {
             punchDao.deletePunch(punch)
+            triggerAutoCloudSync()
         }
     }
 
@@ -232,12 +338,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     notes = notes
                 )
             )
+            triggerAutoCloudSync()
         }
     }
 
     fun deleteActivity(activity: ActivityLogEntity) {
         viewModelScope.launch {
             activityDao.deleteActivity(activity)
+            triggerAutoCloudSync()
         }
     }
 
@@ -249,7 +357,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         dueDate: Long,
         jalaliDateStr: String,
         priority: String,
-        categoryTag: String
+        categoryTag: String,
+        earlyReminderHours: Int = 0
     ) {
         viewModelScope.launch {
             val id = taskDao.insertTask(
@@ -261,29 +370,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     jalaliDateStr = jalaliDateStr,
                     isCompleted = false,
                     priority = priority,
-                    categoryTag = categoryTag
+                    categoryTag = categoryTag,
+                    earlyReminderHours = earlyReminderHours
                 )
             )
-            NotificationHelper.scheduleReminder(
+            NotificationHelper.scheduleReminderWithEarlyAlert(
                 getApplication(),
                 id.toInt(),
                 "یادآور کار: $title",
                 description.ifBlank { "موعد رسیدگی به $title فرا رسیده است." },
-                dueDate
+                dueDate,
+                earlyReminderHours
             )
+            triggerAutoCloudSync()
         }
     }
 
     fun toggleTaskCompletion(task: TaskReminderEntity) {
         viewModelScope.launch {
             taskDao.updateTask(task.copy(isCompleted = !task.isCompleted))
+            triggerAutoCloudSync()
         }
     }
 
     fun deleteTask(task: TaskReminderEntity) {
         viewModelScope.launch {
             taskDao.deleteTask(task)
-            NotificationHelper.cancelReminder(getApplication(), task.id)
+            NotificationHelper.cancelReminderWithEarlyAlert(getApplication(), task.id)
+            triggerAutoCloudSync()
         }
     }
 
@@ -318,18 +432,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     isVerified = isVerified
                 )
             )
+            triggerAutoCloudSync()
         }
     }
 
     fun toggleTransactionVerification(transaction: FinancialTransactionEntity) {
         viewModelScope.launch {
             financialDao.updateTransaction(transaction.copy(isVerified = !transaction.isVerified))
+            triggerAutoCloudSync()
         }
     }
 
     fun deleteTransaction(transaction: FinancialTransactionEntity) {
         viewModelScope.launch {
             financialDao.deleteTransaction(transaction)
+            triggerAutoCloudSync()
         }
     }
 
@@ -343,6 +460,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     targetWeeklyMinutes = targetDailyMinutes * 5
                 )
             )
+            triggerAutoCloudSync()
         }
     }
 
@@ -350,6 +468,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun updateUserProfile(profile: UserProfileEntity) {
         viewModelScope.launch {
             profileDao.insertOrUpdateProfile(profile)
+            triggerAutoCloudSync()
         }
     }
 
@@ -452,6 +571,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun runMinioDiagnostic(onResult: (MinioSyncClient.DiagnosticResult) -> Unit) {
+        viewModelScope.launch {
+            val res = MinioSyncClient.runConnectionDiagnostic()
+            onResult(res)
+        }
+    }
+
+    /**
+     * Calculates deductions for Howzeh:
+     * - Teaching (تدریس): 60 minutes per session if performed
+     * - Study for teaching (مطالعه برای تدریس): exact logged duration
+     */
+    fun getTeachingAndStudyDeductions(dateStr: String): Pair<Int, Int> {
+        val howzehActivities = allActivities.value.filter { it.workplace == "HOWZEH" && it.jalaliDate == dateStr }
+        var teachingMins = 0
+        var studyMins = 0
+        for (act in howzehActivities) {
+            val isTeaching = act.categoryTag == "#تدریس" || (act.title.contains("تدریس") && !act.title.contains("مطالعه"))
+            val isStudy = act.categoryTag == "#مطالعه_تدریس" || (act.title.contains("مطالعه") && act.title.contains("تدریس")) || act.categoryTag == "#مطالعه"
+            if (isTeaching) {
+                teachingMins += 60 // تدریس اگر محقق شود یکساعت است
+            } else if (isStudy) {
+                studyMins += act.durationMinutes // مطالعه هم هر چقدر زمانگیر نشان داد
+            }
+        }
+        return Pair(teachingMins, studyMins)
+    }
+
     // AI Assistant Thinking State
     private val _aiMessages = MutableStateFlow<List<AiChatMessage>>(
         listOf(
@@ -499,6 +646,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (p.workplace == "HOWZEH") howzehMins += mins else mosqueMins += mins
         }
 
+        val (teachingMins, studyMins) = getTeachingAndStudyDeductions(todayStr)
+        val howzehNetMins = (howzehMins - (teachingMins + studyMins)).coerceAtLeast(0)
+
+        val howzehTarget = workplaceConfigs.value.firstOrNull { it.workplace == "HOWZEH" }?.targetDailyMinutes ?: 240
+        val mosqueTarget = workplaceConfigs.value.firstOrNull { it.workplace == "MOSQUE" }?.targetDailyMinutes ?: 180
+
         val howzehIncome = allTransactions.value.filter { it.workplace == "HOWZEH" && it.type == "INCOME" }.sumOf { it.amount }
         val howzehExpense = allTransactions.value.filter { it.workplace == "HOWZEH" && it.type == "EXPENSE" }.sumOf { it.amount }
         val mosqueIncome = allTransactions.value.filter { it.workplace == "MOSQUE" && it.type == "INCOME" }.sumOf { it.amount }
@@ -506,8 +659,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         return """
             - تاریخ امروز: $todayStr
-            - ساعت حضور امروز حوزه: $howzehMins دقیقه (تارگت روزانه: ۲۴۰ دقیقه)
-            - ساعت حضور امروز مسجد: $mosqueMins دقیقه (تارگت روزانه: ۱۸۰ دقیقه)
+            - ساعت حضور ناخالص امروز حوزه: $howzehMins دقیقه
+            - کسر بابت تدریس و مطالعه برای تدریس: ${teachingMins + studyMins} دقیقه ($teachingMins دقیقه تدریس + $studyMins دقیقه مطالعه)
+            - حضور خالص محاسبه‌شده حوزه: $howzehNetMins دقیقه (شاخص موظفی: $howzehTarget دقیقه)
+            - ساعت حضور امروز مسجد: $mosqueMins دقیقه (شاخص موظفی: $mosqueTarget دقیقه)
             - وضعیت مالی حوزه علمیه: کل درآمد $howzehIncome ریال | کل هزینه $howzehExpense ریال | مانده ${howzehIncome - howzehExpense} ریال
             - وضعیت مالی مسجد: کل درآمد $mosqueIncome ریال | کل هزینه $mosqueExpense ریال | مانده ${mosqueIncome - mosqueExpense} ریال
             - تعداد کارهای معوقه/یادآورها: ${allTasks.value.count { !it.isCompleted }} مورد

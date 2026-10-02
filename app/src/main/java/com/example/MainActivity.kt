@@ -137,15 +137,19 @@ fun MishkatMainApp(viewModel: AppViewModel) {
                     }
 
                     if (currentRoute != NavigationItem.AiAssistant.route) {
-                        IconButton(
+                        FilledTonalButton(
                             onClick = { navController.navigate(NavigationItem.AiAssistant.route) },
-                            modifier = Modifier.testTag("top_ai_assistant_icon")
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(end = 4.dp).testTag("top_ai_assistant_icon")
                         ) {
                             Icon(
                                 Icons.Default.AutoAwesome,
-                                contentDescription = "دستیار هوشمند",
-                                tint = MaterialTheme.colorScheme.primary
+                                contentDescription = "تحلیل AI",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
                             )
+                            Spacer(Modifier.width(4.dp))
+                            Text("تحلیل AI", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 },
@@ -173,18 +177,6 @@ fun MishkatMainApp(viewModel: AppViewModel) {
                         modifier = Modifier.testTag("nav_${item.route}")
                     )
                 }
-            }
-        },
-        floatingActionButton = {
-            if (currentRoute != NavigationItem.AiAssistant.route) {
-                ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(NavigationItem.AiAssistant.route) },
-                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
-                    text = { Text("تحلیل AI") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.testTag("ai_assistant_fab")
-                )
             }
         }
     ) { innerPadding ->

@@ -20,8 +20,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.PunchLogEntity
-import com.example.ui.components.AddActivityDialog
 import com.example.util.JalaliCalendar
 import com.example.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
@@ -37,28 +38,42 @@ fun DashboardAttendanceScreen(
     onOpenAiAssistant: () -> Unit
 ) {
     var selectedWorkplaceTab by remember { mutableStateOf("HOWZEH") } // "HOWZEH" or "MOSQUE"
-    var showManualPunchDialog by remember { mutableStateOf(false) }
-    var noteInput by remember { mutableStateOf("") }
+    var showAdjustTargetDialog by remember { mutableStateOf(false) }
 
-    val todayStr = remember { JalaliCalendar.getTodayJalali().toString() }
+    val workplaceConfigs by viewModel.workplaceConfigs.collectAsStateWithLifecycle()
+    val activities by viewModel.allActivities.collectAsStateWithLifecycle()
 
-    // Calculate Today's Total Minutes for Selected Workplace
+    val todayJalali = remember { JalaliCalendar.getTodayJalali() }
+    val todayHijri = remember(todayJalali) { JalaliCalendar.jalaliToHijri(todayJalali) }
+    val todayStr = remember { todayJalali.toString() }
+
+    // Dynamic Target Daily Minutes from Room Database
+    val currentConfig = workplaceConfigs.firstOrNull { it.workplace == selectedWorkplaceTab }
+    val targetDailyMins = currentConfig?.targetDailyMinutes?.toLong()
+        ?: if (selectedWorkplaceTab == "HOWZEH") 240L else 180L
+
+    // Calculate Today's Total Gross Minutes for Selected Workplace
     val todayPunchesForWorkplace = punches.filter {
         it.workplace == selectedWorkplaceTab && it.jalaliDate == todayStr
     }
 
-    var presentMinutesToday by remember(todayPunchesForWorkplace, activePunch) {
-        mutableLongStateOf(
-            todayPunchesForWorkplace.sumOf { p ->
-                val endTime = p.checkOutTime ?: System.currentTimeMillis()
-                (endTime - p.checkInTime) / 60000
-            }
-        )
+    val grossPresentMinutesToday = todayPunchesForWorkplace.sumOf { p ->
+        val endTime = p.checkOutTime ?: System.currentTimeMillis()
+        (endTime - p.checkInTime) / 60000
     }
 
-    // Target daily minutes (default 240 mins / 4 hours for Howzeh, 180 mins / 3 hours for Mosque)
-    val targetDailyMins = if (selectedWorkplaceTab == "HOWZEH") 240L else 180L
-    val diffMins = presentMinutesToday - targetDailyMins
+    // Howzeh Teaching and Study Deductions
+    val (teachingDeductionMins, studyDeductionMins) = remember(activities, todayStr, selectedWorkplaceTab) {
+        if (selectedWorkplaceTab == "HOWZEH") {
+            viewModel.getTeachingAndStudyDeductions(todayStr)
+        } else {
+            Pair(0, 0)
+        }
+    }
+    val totalDeductionMins = teachingDeductionMins + studyDeductionMins
+    val netPresentMinutesToday = maxOf(0L, grossPresentMinutesToday - totalDeductionMins)
+
+    val diffMins = netPresentMinutesToday - targetDailyMins
     val isDeficit = diffMins < 0
 
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
@@ -69,7 +84,7 @@ fun DashboardAttendanceScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Banner / Workplace Switcher
+        // Top Banner / Workplace Switcher & Dual Calendar (Shamsi + Hijri)
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -88,8 +103,9 @@ fun DashboardAttendanceScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "امروز: ${JalaliCalendar.getTodayJalali().toPersianDigits()} - ${JalaliCalendar.monthNames[JalaliCalendar.getTodayJalali().month - 1]}",
+                        text = "امروز: ${todayJalali.toPersianDigits()} (${todayJalali.getMonthName()})  |  ${todayHijri.toPersianDigits()}",
                         style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(12.dp))
@@ -216,30 +232,118 @@ fun DashboardAttendanceScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("شاخص میزان حضور و محاسبه کسری / اضافه کار", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "شاخص موظفی و کسری / اضافه کار",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        TextButton(
+                            onClick = { showAdjustTargetDialog = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("تنظیم شاخص", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
 
-                    val presentHours = presentMinutesToday / 60
-                    val presentMinsRemainder = presentMinutesToday % 60
+                    Spacer(Modifier.height(8.dp))
+
+                    val netHours = netPresentMinutesToday / 60
+                    val netMinsRemainder = netPresentMinutesToday % 60
                     val targetHours = targetDailyMins / 60
+                    val targetMinsRemainder = targetDailyMins % 60
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("میزان حضور امروز:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text("$presentHours ساعت و $presentMinsRemainder دقیقه", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                            Text("حضور خالص احتسابی:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text(
+                                "$netHours ساعت و $netMinsRemainder دقیقه",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleLarge
+                            )
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text("شاخص موظفی روزانه:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text("$targetHours ساعت", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                            val targetStr = if (targetMinsRemainder > 0) {
+                                "$targetHours ساعت و $targetMinsRemainder دقیقه"
+                            } else {
+                                "$targetHours ساعت"
+                            }
+                            Text(
+                                targetStr,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // Howzeh Teaching and Study Deductions Breakdown
+                    if (selectedWorkplaceTab == "HOWZEH" && totalDeductionMins > 0) {
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "کسورات آموزشی حوزه علمیه:",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "• کل حضور فیزیکی: ${grossPresentMinutesToday / 60} ساعت و ${grossPresentMinutesToday % 60} دقیقه",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                if (teachingDeductionMins > 0) {
+                                    Text(
+                                        "• کسر تدریس (هر جلسه ۱ ساعت): ${teachingDeductionMins / 60} ساعت و ${teachingDeductionMins % 60} دقیقه",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                if (studyDeductionMins > 0) {
+                                    Text(
+                                        "• کسر مطالعه اختصاصی تدریس: ${studyDeductionMins / 60} ساعت و ${studyDeductionMins % 60} دقیقه",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                Text(
+                                    "زمان تدریس و مطالعه برای تدریس جزء ساعت موظفی حوزه محسوب نمی‌گردد.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray
+                                )
+                            }
                         }
                     }
 
                     Spacer(Modifier.height(12.dp))
 
-                    val progress = (presentMinutesToday.toFloat() / targetDailyMins.toFloat()).coerceIn(0f, 1f)
+                    val progress = if (targetDailyMins > 0) {
+                        (netPresentMinutesToday.toFloat() / targetDailyMins.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
+
                     LinearProgressIndicator(
                         progress = { progress },
                         modifier = Modifier
@@ -355,6 +459,93 @@ fun DashboardAttendanceScreen(
                 }
             }
         }
+    }
+
+    // Adjust Target Hours Dialog (with 30-min steps)
+    if (showAdjustTargetDialog) {
+        var tempMinutes by remember(targetDailyMins) { mutableIntStateOf(targetDailyMins.toInt()) }
+
+        AlertDialog(
+            onDismissRequest = { showAdjustTargetDialog = false },
+            title = {
+                Text(
+                    text = "تنظیم شاخص موظفی ${if (selectedWorkplaceTab == "HOWZEH") "حوزه علمیه" else "مسجد"}",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val h = tempMinutes / 60
+                    val m = tempMinutes % 60
+                    val textDisplay = if (m > 0) "$h ساعت و $m دقیقه (${h + 0.5f} ساعت)" else "$h ساعت"
+
+                    Text(
+                        text = textDisplay,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                if (tempMinutes >= 60) tempMinutes -= 30
+                            }
+                        ) {
+                            Text("- ۳۰ دقیقه")
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                if (tempMinutes <= 720) tempMinutes += 30
+                            }
+                        ) {
+                            Text("+ ۳۰ دقیقه")
+                        }
+                    }
+
+                    Slider(
+                        value = tempMinutes.toFloat(),
+                        onValueChange = {
+                            // Snap to nearest 30 minutes
+                            val rounded = (Math.round(it / 30f) * 30).toInt().coerceIn(30, 720)
+                            tempMinutes = rounded
+                        },
+                        valueRange = 30f..720f,
+                        steps = 22 // 23 possible values in steps of 30 mins
+                    )
+
+                    Text(
+                        text = "تغییرات بلافاصله در کل برنامه، صفحه اصلی و محاسبات کسری/مازاد حضور اعمال می‌شود.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateWorkplaceConfig(selectedWorkplaceTab, tempMinutes)
+                        showAdjustTargetDialog = false
+                    }
+                ) {
+                    Text("اعمال و ذخیره")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAdjustTargetDialog = false }) {
+                    Text("انصراف")
+                }
+            }
+        )
     }
 }
 

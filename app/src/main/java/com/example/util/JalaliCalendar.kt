@@ -207,4 +207,56 @@ object JalaliCalendar {
             else -> 0
         }
     }
+
+    data class HijriDate(
+        val year: Int,
+        val month: Int, // 1 to 12
+        val day: Int    // 1 to 30
+    ) {
+        fun getMonthName(): String = islamicMonthNames.getOrElse(month - 1) { "" }
+        fun toPersianDigits(): String = JalaliCalendar.toPersianDigits("$day ${getMonthName()} $year")
+        fun toShortPersianDigits(): String = JalaliCalendar.toPersianDigits("$day ${getMonthName()}")
+        override fun toString(): String = String.format("%04d/%02d/%02d", year, month, day)
+    }
+
+    val islamicMonthNames = listOf(
+        "محرم", "صفر", "ربیع‌الاول", "ربیع‌الثانی",
+        "جمادی‌الاول", "جمادی‌الثانی", "رجب", "شعبان",
+        "رمضان", "شوال", "ذی‌القعده", "ذی‌الحجه"
+    )
+
+    fun gregorianToJulianDay(gy: Int, gm: Int, gd: Int): Double {
+        var y = gy
+        var m = gm
+        if (m <= 2) {
+            y -= 1
+            m += 12
+        }
+        val a = (y / 100).toDouble()
+        val b = 2 - a.toInt() + (a / 4).toInt()
+        return (365.25 * (y + 4716)).toInt() + (30.6001 * (m + 1)).toInt() + gd + b - 1524.5
+    }
+
+    fun julianDayToHijri(jd: Double): HijriDate {
+        val z = (jd + 0.5).toInt()
+        val l = z - 1948440 + 10632
+        val n = (l - 1) / 10631
+        val l1 = l - 10631 * n + 354
+        val j = ((10985 - l1) / 5316) * ((50 * l1) / 17719) + (l1 / 5670) * ((43 * l1) / 15238)
+        val l2 = l1 - ((30 - j) / 15) * ((17719 * j) / 50) - (j / 16) * ((15238 * j) / 43) + 29
+        val m = (24 * l2) / 709
+        val d = l2 - (709 * m) / 24
+        val y = 30 * n + j - 30
+        return HijriDate(y, m.coerceIn(1, 12), d.coerceIn(1, 30))
+    }
+
+    fun jalaliToHijri(jalaliDate: JalaliDate): HijriDate {
+        val cal = jalaliToGregorian(jalaliDate.year, jalaliDate.month, jalaliDate.day)
+        val jd = gregorianToJulianDay(
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH) + 1,
+            cal.get(Calendar.DAY_OF_MONTH)
+        )
+        return julianDayToHijri(jd)
+    }
 }
