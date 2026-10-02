@@ -15,8 +15,8 @@ object ServerConfigManager {
     private const val KEY_GEMINI_API_KEY = "key_gemini_api_key"
 
     const val DEFAULT_ENDPOINT = "https://gift.nodrive.ir"
-    const val DEFAULT_ACCESS_KEY = ""
-    const val DEFAULT_SECRET_KEY = ""
+    const val DEFAULT_ACCESS_KEY = "ycvug2CTkf7gDpCnIVIS"
+    const val DEFAULT_SECRET_KEY = "NOM0zd28HIkjZM7fcNKegOwa4N8GhwqmkocOi1ES"
     const val DEFAULT_BUCKET = "09107739189main"
     const val DEFAULT_PREFIX = "meshkat/"
     const val DEFAULT_GEMINI_API_KEY = ""
@@ -26,6 +26,14 @@ object ServerConfigManager {
     fun init(context: Context) {
         if (prefs == null) {
             prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val currentKey = prefs?.getString(KEY_ACCESS_KEY, null)
+            if (currentKey.isNullOrBlank() || currentKey == "ycvug2CTkf7gDpCnlVIS") {
+                prefs?.edit()?.putString(KEY_ACCESS_KEY, DEFAULT_ACCESS_KEY)?.apply()
+            }
+            val currentSecret = prefs?.getString(KEY_SECRET_KEY, null)
+            if (currentSecret.isNullOrBlank()) {
+                prefs?.edit()?.putString(KEY_SECRET_KEY, DEFAULT_SECRET_KEY)?.apply()
+            }
         }
     }
 
