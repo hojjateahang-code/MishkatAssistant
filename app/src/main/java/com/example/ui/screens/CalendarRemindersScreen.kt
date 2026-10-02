@@ -545,6 +545,15 @@ fun CalendarRemindersScreen(
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = FontWeight.Medium
                                         )
+                                        if (task.categoryTag.isNotBlank()) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Text(
+                                                text = task.categoryTag,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                         Spacer(Modifier.width(6.dp))
                                         if (task.earlyReminderHours > 0) {
                                             Text(
@@ -754,6 +763,21 @@ private fun TaskReminderItemCard(
                             )
                         }
                     )
+
+                    if (task.categoryTag.isNotBlank() && task.categoryTag != "#عمومی") {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = task.categoryTag,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
 
                     val scheduledTimeStr = timeFormat.format(Date(task.dueDate))
                     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -119,6 +119,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        com.example.sync.ServerConfigManager.init(application)
+
         // Initial boot sync & connection check
         viewModelScope.launch {
             try {
@@ -282,6 +284,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     note = updatedNote
                 )
             )
+            triggerAutoCloudSync()
+        }
+    }
+
+    fun updatePunchNote(punch: PunchLogEntity, newNote: String) {
+        viewModelScope.launch {
+            punchDao.updatePunch(punch.copy(note = newNote.trim()))
             triggerAutoCloudSync()
         }
     }

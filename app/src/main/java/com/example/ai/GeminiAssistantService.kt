@@ -23,11 +23,16 @@ object GeminiAssistantService {
         prompt: String,
         contextSummary: String
     ): Result<String> = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "your_api_key_here") {
-            return@withContext Result.failure(
-                IllegalStateException("کلید API جمینای تنظیم نشده است. لطفاً کلید معتبر را در فایل .env یا تنظیمات وارد نمایید.")
-            )
+        val customKey = try {
+            com.example.sync.ServerConfigManager.getGeminiApiKey()
+        } catch (e: Throwable) {
+            ""
+        }
+        val buildKey = BuildConfig.GEMINI_API_KEY
+        val apiKey = when {
+            customKey.isNotBlank() && customKey != "your_gemini_api_key_here" -> customKey
+            buildKey.isNotBlank() && buildKey != "MY_GEMINI_API_KEY" && buildKey != "your_api_key_here" -> buildKey
+            else -> com.example.sync.ServerConfigManager.DEFAULT_GEMINI_API_KEY
         }
 
         val systemPrompt = """

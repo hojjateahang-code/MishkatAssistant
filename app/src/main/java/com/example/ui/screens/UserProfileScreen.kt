@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -42,6 +44,7 @@ fun UserProfileScreen(
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
+    var showServerConfigDialog by remember { mutableStateOf(false) }
     var isTestingMinio by remember { mutableStateOf(false) }
     var diagnosticResult by remember { mutableStateOf<MinioSyncClient.DiagnosticResult?>(null) }
     var showDiagnosticDialog by remember { mutableStateOf(false) }
@@ -334,12 +337,12 @@ fun UserProfileScreen(
                     Text(
                         text = "سرور: ${MinioSyncClient.getEndpoint()}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "باکت: ${MinioSyncClient.getBucket()} | مسیر: ${MinioSyncClient.getPrefix()}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     val lastSyncTime = profile?.lastSyncTimestamp ?: 0L
@@ -355,7 +358,7 @@ fun UserProfileScreen(
                         Text(
                             text = "تاکنون پشتیبانی در ابر ثبت نشده است.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -369,12 +372,27 @@ fun UserProfileScreen(
                             Text(
                                 text = syncStatusMessage ?: "",
                                 style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(8.dp)
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(10.dp)
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
+
+                    // Button to Open Secret & Server Configuration Dialog
+                    OutlinedButton(
+                        onClick = { showServerConfigDialog = true },
+                        modifier = Modifier.fillMaxWidth().testTag("open_server_config_button"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("تنظیم اطلاعات سرور، کلیدها و Secrets", fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(Modifier.height(10.dp))
 
                     if (isSyncing) {
                         Row(
@@ -384,7 +402,7 @@ fun UserProfileScreen(
                         ) {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(12.dp))
-                            Text("در حال پردازش عملیات شبکه ابری...", style = MaterialTheme.typography.bodyMedium)
+                            Text("در حال پردازش عملیات شبکه ابری...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                         }
                     } else {
                         Row(
@@ -404,7 +422,7 @@ fun UserProfileScreen(
                             ) {
                                 Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("پشتیبان‌گیری در ابر")
+                                Text("پشتیبان‌گیری")
                             }
 
                             OutlinedButton(
@@ -416,7 +434,7 @@ fun UserProfileScreen(
                             ) {
                                 Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("بازیابی از ابر")
+                                Text("بازیابی")
                             }
                         }
 
@@ -628,7 +646,7 @@ fun UserProfileScreen(
         )
     }
 
-    // MinIO Connection Diagnostic Modal
+    // MinIO Connection Diagnostic Modal (High Contrast & Legible)
     if (showDiagnosticDialog && diagnosticResult != null) {
         val res = diagnosticResult!!
         AlertDialog(
@@ -646,40 +664,50 @@ fun UserProfileScreen(
             },
             text = {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Surface(
-                        color = if (res.isSuccess) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+                        color = if (res.isSuccess) Color(0xFF065F46) else MaterialTheme.colorScheme.error,
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = res.message,
                             fontWeight = FontWeight.Bold,
-                            color = if (res.isSuccess) Color(0xFF065F46) else Color(0xFF991B1B),
+                            color = Color.White,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(10.dp)
+                            modifier = Modifier.padding(12.dp)
                         )
                     }
 
-                    Text("آدرس سرور: ${res.endpoint}", style = MaterialTheme.typography.bodySmall)
-                    Text("باکت هدف: ${res.bucket}", style = MaterialTheme.typography.bodySmall)
-                    Text("زمان پاسخگویی (Latency): ${res.latencyMs} میلی‌ثانیه", style = MaterialTheme.typography.bodySmall)
-                    Text("کد وضعیت HTTP: ${if (res.httpCode != -1) res.httpCode else "عدم دسترسی شبکه"}", style = MaterialTheme.typography.bodySmall)
-
-                    Spacer(Modifier.height(4.dp))
-                    Text("جزئیات سیستمی پاسخ:", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("آدرس سرور: ${res.endpoint}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("باکت هدف: ${res.bucket}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("زمان پاسخگویی (Latency): ${res.latencyMs} میلی‌ثانیه", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("کد وضعیت HTTP: ${if (res.httpCode != -1) res.httpCode else "عدم دسترسی شبکه"}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = if (res.isSuccess) Color(0xFF10B981) else MaterialTheme.colorScheme.error)
+                        }
+                    }
+
+                    Text("جزئیات سیستمی پاسخ:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                         shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = res.details,
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.DarkGray,
-                            modifier = Modifier.padding(8.dp)
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(10.dp)
                         )
                     }
                 }
@@ -687,6 +715,155 @@ fun UserProfileScreen(
             confirmButton = {
                 Button(onClick = { showDiagnosticDialog = false }) {
                     Text("متوجه شدم")
+                }
+            }
+        )
+    }
+
+    // MinIO & Gemini Server Secrets Configuration Dialog
+    if (showServerConfigDialog) {
+        var endpointInput by remember { mutableStateOf(com.example.sync.ServerConfigManager.getMinioEndpoint()) }
+        var bucketInput by remember { mutableStateOf(com.example.sync.ServerConfigManager.getMinioBucket()) }
+        var accessKeyInput by remember { mutableStateOf(com.example.sync.ServerConfigManager.getMinioAccessKey()) }
+        var secretKeyInput by remember { mutableStateOf(com.example.sync.ServerConfigManager.getMinioSecretKey()) }
+        var prefixInput by remember { mutableStateOf(com.example.sync.ServerConfigManager.getMinioPrefix()) }
+        var geminiKeyInput by remember { mutableStateOf(com.example.sync.ServerConfigManager.getGeminiApiKey()) }
+        var isSecretVisible by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showServerConfigDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("تنظیم اطلاعات سرور ابری و کلیدها", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "اطلاعات اتصال به آبجکت‌استوریج MinIO (پروتکل استاندارد S3) و کلیدهای محرمانه را در این قسمت وارد یا ویرایش نمایید:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = endpointInput,
+                        onValueChange = { endpointInput = it },
+                        label = { Text("آدرس سرور MinIO (Endpoint)") },
+                        placeholder = { Text("https://gift.nodrive.ir") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_minio_endpoint"),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = bucketInput,
+                        onValueChange = { bucketInput = it },
+                        label = { Text("نام باکت (Bucket Name)") },
+                        placeholder = { Text("09107739189main") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_minio_bucket"),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = accessKeyInput,
+                        onValueChange = { accessKeyInput = it },
+                        label = { Text("کلید دسترسی (Access Key)") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_minio_access_key"),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = secretKeyInput,
+                        onValueChange = { secretKeyInput = it },
+                        label = { Text("کلید محرمانه (Secret Key)") },
+                        visualTransformation = if (isSecretVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { isSecretVisible = !isSecretVisible }) {
+                                Icon(
+                                    imageVector = if (isSecretVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "تغییر نمایش رمز"
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("input_minio_secret_key"),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = prefixInput,
+                        onValueChange = { prefixInput = it },
+                        label = { Text("پیشوند و پوشه ذخیره (Prefix)") },
+                        placeholder = { Text("meshkat/") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = geminiKeyInput,
+                        onValueChange = { geminiKeyInput = it },
+                        label = { Text("کلید هوش مصنوعی جِمینای (Gemini API Key)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                com.example.sync.ServerConfigManager.resetToDefaults()
+                                endpointInput = com.example.sync.ServerConfigManager.DEFAULT_ENDPOINT
+                                bucketInput = com.example.sync.ServerConfigManager.DEFAULT_BUCKET
+                                accessKeyInput = com.example.sync.ServerConfigManager.DEFAULT_ACCESS_KEY
+                                secretKeyInput = com.example.sync.ServerConfigManager.DEFAULT_SECRET_KEY
+                                prefixInput = com.example.sync.ServerConfigManager.DEFAULT_PREFIX
+                                geminiKeyInput = com.example.sync.ServerConfigManager.DEFAULT_GEMINI_API_KEY
+                                Toast.makeText(context, "اطلاعات به مقادیر پیش‌فرض بازنشانی شد", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("بازنشانی به پیش‌فرض", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        com.example.sync.ServerConfigManager.saveConfig(
+                            endpoint = endpointInput,
+                            accessKey = accessKeyInput,
+                            secretKey = secretKeyInput,
+                            bucket = bucketInput,
+                            prefix = prefixInput,
+                            geminiApiKey = geminiKeyInput
+                        )
+                        showServerConfigDialog = false
+                        Toast.makeText(context, "تنظیمات سرور با موفقیت ذخیره شد.", Toast.LENGTH_SHORT).show()
+
+                        // Auto-run ping diagnostic to give user instant feedback
+                        isTestingMinio = true
+                        viewModel.runMinioDiagnostic { result ->
+                            isTestingMinio = false
+                            diagnosticResult = result
+                            showDiagnosticDialog = true
+                        }
+                    },
+                    modifier = Modifier.testTag("save_server_config_button")
+                ) {
+                    Text("ذخیره و تست اتصال")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerConfigDialog = false }) {
+                    Text("انصراف")
                 }
             }
         )

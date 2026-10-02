@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -39,6 +41,9 @@ fun DashboardAttendanceScreen(
 ) {
     var selectedWorkplaceTab by remember { mutableStateOf("HOWZEH") } // "HOWZEH" or "MOSQUE"
     var showAdjustTargetDialog by remember { mutableStateOf(false) }
+    var punchToEditNote by remember { mutableStateOf<PunchLogEntity?>(null) }
+    var showCheckInWithNoteDialog by remember { mutableStateOf(false) }
+    var showManualPastPunchDialog by remember { mutableStateOf(false) }
 
     val workplaceConfigs by viewModel.workplaceConfigs.collectAsStateWithLifecycle()
     val activities by viewModel.allActivities.collectAsStateWithLifecycle()
@@ -195,6 +200,17 @@ fun DashboardAttendanceScreen(
                             Spacer(Modifier.width(8.dp))
                             Text("ثبت ورود الان به ${if (selectedWorkplaceTab == "HOWZEH") "حوزه علمیه" else "مسجد"}", fontWeight = FontWeight.Bold)
                         }
+
+                        Spacer(Modifier.height(6.dp))
+
+                        TextButton(
+                            onClick = { showCheckInWithNoteDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("ثبت ورود همراه با یادداشت / توضیحات تردد", style = MaterialTheme.typography.bodySmall)
+                        }
                     } else if (isActiveInThisWorkplace) {
                         Button(
                             onClick = { viewModel.checkOut(activePunch) },
@@ -207,6 +223,18 @@ fun DashboardAttendanceScreen(
                             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("ثبت خروج از ${if (selectedWorkplaceTab == "HOWZEH") "حوزه علمیه" else "مسجد"}", fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+
+                        OutlinedButton(
+                            onClick = { punchToEditNote = activePunch },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            val noteText = if (!activePunch.note.isNull_Blank()) "ویرایش یادداشت حضور فعلی: ${activePunch.note}" else "افزودن یادداشت / توضیحات به حضور فعلی"
+                            Text(noteText, style = MaterialTheme.typography.bodySmall)
                         }
                     } else {
                         // Active in the OTHER workplace
@@ -392,18 +420,50 @@ fun DashboardAttendanceScreen(
 
         // Section Title: History of Punches
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "تاریخچه ترددهای ثبت‌شده",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                IconButton(onClick = onOpenAiAssistant) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = "تحلیل هوشمند", tint = MaterialTheme.colorScheme.primary)
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "تاریخچه ترددهای ثبت‌شده",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FilledTonalButton(
+                            onClick = { showManualPastPunchDialog = true },
+                            modifier = Modifier.testTag("add_manual_punch_button")
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("ثبت دستی تردد با توضیحات", style = MaterialTheme.typography.labelSmall)
+                        }
+                        IconButton(onClick = onOpenAiAssistant) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = "تحلیل هوشمند", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "ستون توضیحات تردد در گزارشات: کاملاً مستقل از ریز فعالیت‌ها بوده و جهت ثبت علل حضور، جلسات، مأموریت‌ها یا تأخیر موجه در PDF است.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -431,7 +491,7 @@ fun DashboardAttendanceScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "تاریخ: ${punch.jalaliDate}",
                                 fontWeight = FontWeight.Bold,
@@ -446,21 +506,176 @@ fun DashboardAttendanceScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (!punch.note.isNull_Blank()) {
-                                Text(
-                                    text = "یادداشت: ${punch.note}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
-                                )
+                                Spacer(Modifier.height(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(Icons.Default.Notes, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = "توضیحات: ${punch.note}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        IconButton(onClick = { viewModel.deletePunch(punch) }) {
-                            Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = Color.Gray)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { punchToEditNote = punch }) {
+                                Icon(Icons.Default.EditNote, contentDescription = "ویرایش یادداشت تردد", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            IconButton(onClick = { viewModel.deletePunch(punch) }) {
+                                Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = Color.Gray)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    // Check-in with Note Dialog
+    if (showCheckInWithNoteDialog) {
+        var noteInput by remember { mutableStateOf("") }
+        val presetNotes = listOf("جلسه شورای معاونین", "مأموریت اداری", "تأخیر موجه با هماهنگی", "برنامه فرهنگی ویژه", "کلاس فوق‌العاده", "حضور عادی")
+
+        AlertDialog(
+            onDismissRequest = { showCheckInWithNoteDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("ثبت ورود با توضیحات و یادداشت", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "محل: ${if (selectedWorkplaceTab == "HOWZEH") "حوزه علمیه" else "مسجد"}",
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    OutlinedTextField(
+                        value = noteInput,
+                        onValueChange = { noteInput = it },
+                        label = { Text("یادداشت / توضیحات تردد (اختیاری)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        maxLines = 3
+                    )
+                    Text("عبارات پیشنهادی:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(presetNotes) { pNote ->
+                            FilterChip(
+                                selected = noteInput == pNote,
+                                onClick = { noteInput = pNote },
+                                label = { Text(pNote, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+                    Text(
+                        text = "این توضیحات در ستون «توضیحات تردد» گزارش‌های PDF رسمی چاپ خواهد شد.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.checkIn(selectedWorkplaceTab, noteInput)
+                        showCheckInWithNoteDialog = false
+                    }
+                ) {
+                    Text("ثبت ورود الان")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCheckInWithNoteDialog = false }) {
+                    Text("انصراف")
+                }
+            }
+        )
+    }
+
+    // Edit Existing Punch Note Dialog
+    if (punchToEditNote != null) {
+        val targetPunch = punchToEditNote!!
+        var noteInput by remember(targetPunch) { mutableStateOf(targetPunch.note ?: "") }
+        val presetNotes = listOf("جلسه شورای معاونین", "مأموریت اداری", "تأخیر موجه با هماهنگی", "برنامه فرهنگی ویژه", "کلاس فوق‌العاده", "تعطیلی زودتر با مرخصی")
+
+        AlertDialog(
+            onDismissRequest = { punchToEditNote = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.EditNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("ویرایش یادداشت تردد", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "تردد تاریخ ${targetPunch.jalaliDate} (${if (targetPunch.workplace == "HOWZEH") "حوزه علمیه" else "مسجد"})",
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    OutlinedTextField(
+                        value = noteInput,
+                        onValueChange = { noteInput = it },
+                        label = { Text("توضیحات و یادداشت تردد") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        maxLines = 3
+                    )
+                    Text("عبارات پیشنهادی:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(presetNotes) { pNote ->
+                            FilterChip(
+                                selected = noteInput == pNote,
+                                onClick = { noteInput = pNote },
+                                label = { Text(pNote, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+                    Text(
+                        text = "این یادداشت مستقیماً در برگه رسمی کارکرد و PDF تردد ذخیره و نمایش داده می‌شود.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updatePunchNote(targetPunch, noteInput)
+                        punchToEditNote = null
+                    }
+                ) {
+                    Text("ذخیره یادداشت")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { punchToEditNote = null }) {
+                    Text("انصراف")
+                }
+            }
+        )
     }
 
     // Adjust Target Hours Dialog (with 30-min steps)
@@ -544,6 +759,202 @@ fun DashboardAttendanceScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showAdjustTargetDialog = false }) {
+                    Text("انصراف")
+                }
+            }
+        )
+    }
+
+    // Add Manual Past Attendance Punch Dialog
+    if (showManualPastPunchDialog) {
+        var manualWorkplace by remember { mutableStateOf(selectedWorkplaceTab) }
+        var manualYear by remember { mutableIntStateOf(todayJalali.year) }
+        var manualMonth by remember { mutableIntStateOf(todayJalali.month) }
+        var manualDay by remember { mutableIntStateOf(todayJalali.day) }
+
+        var startHour by remember { mutableIntStateOf(8) }
+        var startMinute by remember { mutableIntStateOf(0) }
+        var endHour by remember { mutableIntStateOf(12) }
+        var endMinute by remember { mutableIntStateOf(30) }
+
+        var manualNote by remember { mutableStateOf("") }
+        val presetNotes = listOf("حضور عادی", "جلسه شورای معاونین", "مأموریت اداری", "کلاس فوق‌العاده", "تأخیر موجه با هماهنگی", "برنامه فرهنگی ویژه", "کارگاه آموزشی")
+
+        val maxDays = JalaliCalendar.getDaysInJalaliMonth(manualYear, manualMonth)
+        if (manualDay > maxDays) manualDay = maxDays
+
+        val totalMins = ((endHour * 60 + endMinute) - (startHour * 60 + startMinute)).coerceAtLeast(0)
+
+        AlertDialog(
+            onDismissRequest = { showManualPastPunchDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AddAlarm, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text("ثبت دستی تردد با توضیحات کامل", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Workplace selector
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = manualWorkplace == "HOWZEH",
+                            onClick = { manualWorkplace = "HOWZEH" },
+                            label = { Text("حوزه علمیه") }
+                        )
+                        FilterChip(
+                            selected = manualWorkplace == "MOSQUE",
+                            onClick = { manualWorkplace = "MOSQUE" },
+                            label = { Text("مسجد") }
+                        )
+                    }
+
+                    // Date Selection
+                    Text("تاریخ تردد:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("روز ($manualDay)", style = MaterialTheme.typography.labelSmall)
+                            Slider(
+                                value = manualDay.toFloat(),
+                                onValueChange = { manualDay = it.toInt() },
+                                valueRange = 1f..maxDays.toFloat(),
+                                steps = (maxDays - 2).coerceAtLeast(0)
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1.2f)) {
+                            val mName = JalaliCalendar.monthNames.getOrElse(manualMonth - 1) { "" }
+                            Text("ماه ($mName)", style = MaterialTheme.typography.labelSmall)
+                            Slider(
+                                value = manualMonth.toFloat(),
+                                onValueChange = { manualMonth = it.toInt() },
+                                valueRange = 1f..12f,
+                                steps = 10
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "تاریخ انتخابی: $manualDay ${JalaliCalendar.monthNames.getOrElse(manualMonth - 1) { "" }} $manualYear",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+
+                    // Times
+                    Text("ساعت ورود و خروج:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("ساعت ورود: ${String.format("%02d:%02d", startHour, startMinute)}", style = MaterialTheme.typography.labelSmall)
+                            Slider(
+                                value = startHour.toFloat(),
+                                onValueChange = { startHour = it.toInt() },
+                                valueRange = 5f..23f,
+                                steps = 17
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("ساعت خروج: ${String.format("%02d:%02d", endHour, endMinute)}", style = MaterialTheme.typography.labelSmall)
+                            Slider(
+                                value = endHour.toFloat(),
+                                onValueChange = { endHour = it.toInt() },
+                                valueRange = 5f..23f,
+                                steps = 17
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "مدت محاسبه شده: ${totalMins / 60} ساعت و ${totalMins % 60} دقیقه",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+
+                    // Note / Description
+                    Text("یادداشت و توضیحات این تردد (ستون توضیحات گزارش):", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = manualNote,
+                        onValueChange = { manualNote = it },
+                        label = { Text("توضیحات (مثال: جلسه، مأموریت، تأخیر موجه)") },
+                        placeholder = { Text("توضیحاتی برای ثبت در برگه رسمی کارکرد...") },
+                        modifier = Modifier.fillMaxWidth().testTag("manual_punch_note_input"),
+                        minLines = 2
+                    )
+
+                    Text("عبارات پیشنهادی سریع:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(presetNotes) { pNote ->
+                            FilterChip(
+                                selected = manualNote == pNote,
+                                onClick = { manualNote = pNote },
+                                label = { Text(pNote, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val calIn = JalaliCalendar.jalaliToGregorian(manualYear, manualMonth, manualDay)
+                        calIn.set(java.util.Calendar.HOUR_OF_DAY, startHour)
+                        calIn.set(java.util.Calendar.MINUTE, startMinute)
+                        calIn.set(java.util.Calendar.SECOND, 0)
+                        calIn.set(java.util.Calendar.MILLISECOND, 0)
+
+                        val calOut = JalaliCalendar.jalaliToGregorian(manualYear, manualMonth, manualDay)
+                        calOut.set(java.util.Calendar.HOUR_OF_DAY, endHour)
+                        calOut.set(java.util.Calendar.MINUTE, endMinute)
+                        calOut.set(java.util.Calendar.SECOND, 0)
+                        calOut.set(java.util.Calendar.MILLISECOND, 0)
+
+                        val dateStr = String.format("%04d/%02d/%02d", manualYear, manualMonth, manualDay)
+
+                        viewModel.addManualPunch(
+                            workplace = manualWorkplace,
+                            checkInTime = calIn.timeInMillis,
+                            checkOutTime = calOut.timeInMillis,
+                            jalaliDate = dateStr,
+                            note = manualNote.trim()
+                        )
+                        showManualPastPunchDialog = false
+                    },
+                    modifier = Modifier.testTag("submit_manual_punch_button")
+                ) {
+                    Text("ثبت و ذخیره تردد")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualPastPunchDialog = false }) {
                     Text("انصراف")
                 }
             }

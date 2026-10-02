@@ -23,35 +23,15 @@ object MinioSyncClient {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    fun getEndpoint(): String = try {
-        BuildConfig.MINIO_ENDPOINT.ifBlank { "https://gift.nodrive.ir" }.trimEnd('/')
-    } catch (e: Throwable) {
-        "https://gift.nodrive.ir"
-    }
+    fun getEndpoint(): String = ServerConfigManager.getMinioEndpoint()
 
-    fun getBucket(): String = try {
-        BuildConfig.MINIO_BUCKET.ifBlank { "09107739189main" }
-    } catch (e: Throwable) {
-        "09107739189main"
-    }
+    fun getBucket(): String = ServerConfigManager.getMinioBucket()
 
-    fun getPrefix(): String = try {
-        BuildConfig.MINIO_PREFIX.ifBlank { "meshkat/" }
-    } catch (e: Throwable) {
-        "meshkat/"
-    }
+    fun getPrefix(): String = ServerConfigManager.getMinioPrefix()
 
-    private fun getAccessKey(): String = try {
-        BuildConfig.MINIO_ACCESS_KEY_ID.ifBlank { "ycvug2CTkf7gDpCnlVIS" }
-    } catch (e: Throwable) {
-        "ycvug2CTkf7gDpCnlVIS"
-    }
+    private fun getAccessKey(): String = ServerConfigManager.getMinioAccessKey()
 
-    private fun getSecretKey(): String = try {
-        BuildConfig.MINIO_SECRET_ACCESS_KEY.ifBlank { "NOM0zd28HIkjZM7fcNKegOwa4N8GhwqmkocOi1ES" }
-    } catch (e: Throwable) {
-        "NOM0zd28HIkjZM7fcNKegOwa4N8GhwqmkocOi1ES"
-    }
+    private fun getSecretKey(): String = ServerConfigManager.getMinioSecretKey()
 
     data class DiagnosticResult(
         val isSuccess: Boolean,

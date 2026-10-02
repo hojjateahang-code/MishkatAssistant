@@ -369,19 +369,28 @@ fun AddTaskReminderDialog(
                 }
 
                 // Tag Selection
-                Text("دسته‌بندی و هشتگ:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(taskTags) { tag ->
-                            FilterChip(
-                                selected = categoryTag == tag,
-                                onClick = { categoryTag = tag },
-                                label = { Text(tag) }
-                            )
-                        }
+                Text("دسته‌بندی، هشتگ و برچسب یادآور:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = categoryTag,
+                    onValueChange = { categoryTag = it },
+                    label = { Text("تایپ برچسب جدید یا هشتگ (مثال: تدریس_فقه یا پیگیری_شهرداری)") },
+                    placeholder = { Text("#برچسب_دلخواه_شما") },
+                    modifier = Modifier.fillMaxWidth().testTag("task_tag_input"),
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(Icons.Default.Tag, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                )
+                Spacer(Modifier.height(4.dp))
+                Text("پیشنهادهای آماده یا انتخاب سریع:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val allSuggestedTags = listOf("#عمومی", "#حوزه", "#مسجد", "#تدریس", "#جلسه_شورا", "#فرهنگی", "#قرآنی", "#پیگیری", "#مطالعه", "#مالی")
+                    items(allSuggestedTags) { tag ->
+                        FilterChip(
+                            selected = categoryTag == tag,
+                            onClick = { categoryTag = tag },
+                            label = { Text(tag, style = MaterialTheme.typography.labelSmall) }
+                        )
                     }
                 }
             }
@@ -398,6 +407,11 @@ fun AddTaskReminderDialog(
                     val dueDateMillis = cal.timeInMillis
                     val dateStr = String.format("%04d/%02d/%02d", selectedYear, selectedMonth, selectedDay)
 
+                    val cleanedTag = if (categoryTag.isNotBlank()) {
+                        val trimmed = categoryTag.trim().replace(" ", "_")
+                        if (trimmed.startsWith("#")) trimmed else "#$trimmed"
+                    } else "#عمومی"
+
                     onConfirm(
                         title.ifBlank { "یادآور کار" },
                         desc,
@@ -405,7 +419,7 @@ fun AddTaskReminderDialog(
                         dueDateMillis,
                         dateStr,
                         priority,
-                        categoryTag,
+                        cleanedTag,
                         earlyReminderHours
                     )
                 },
