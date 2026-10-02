@@ -42,9 +42,11 @@ fun DashboardAttendanceScreen(
 
     val workplaceConfigs by viewModel.workplaceConfigs.collectAsStateWithLifecycle()
     val activities by viewModel.allActivities.collectAsStateWithLifecycle()
+    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
+    val hijriOffset = userProfile?.hijriOffsetDays ?: 0
 
     val todayJalali = remember { JalaliCalendar.getTodayJalali() }
-    val todayHijri = remember(todayJalali) { JalaliCalendar.jalaliToHijri(todayJalali) }
+    val todayHijri = remember(todayJalali, hijriOffset) { JalaliCalendar.jalaliToHijri(todayJalali, hijriOffset) }
     val todayStr = remember { todayJalali.toString() }
 
     // Dynamic Target Daily Minutes from Room Database

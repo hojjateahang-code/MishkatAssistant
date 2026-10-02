@@ -114,6 +114,7 @@ data class BackupPackage(
             pObj.put("notificationsEnabled", p.notificationsEnabled)
             pObj.put("autoSyncEnabled", p.autoSyncEnabled)
             pObj.put("lastSyncTimestamp", p.lastSyncTimestamp)
+            pObj.put("hijriOffsetDays", p.hijriOffsetDays)
             root.put("profile", pObj)
         }
 
@@ -246,7 +247,8 @@ data class BackupPackage(
                     email = pObj.optString("email", ""),
                     notificationsEnabled = pObj.optBoolean("notificationsEnabled", true),
                     autoSyncEnabled = pObj.optBoolean("autoSyncEnabled", false),
-                    lastSyncTimestamp = pObj.optLong("lastSyncTimestamp", 0L)
+                    lastSyncTimestamp = pObj.optLong("lastSyncTimestamp", 0L),
+                    hijriOffsetDays = pObj.optInt("hijriOffsetDays", 0)
                 )
             }
 

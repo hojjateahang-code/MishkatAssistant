@@ -22,7 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.TaskReminderEntity
+import com.example.data.UserProfileEntity
 import com.example.ui.components.AddTaskReminderDialog
 import com.example.util.JalaliCalendar
 import com.example.util.OccasionsDatabase
@@ -38,6 +40,10 @@ fun CalendarRemindersScreen(
     tasks: List<TaskReminderEntity>,
     selectedDate: JalaliCalendar.JalaliDate
 ) {
+    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
+    val hijriOffset = userProfile?.hijriOffsetDays ?: 0
+    var showHijriOffsetDialog by remember { mutableStateOf(false) }
+
     var currentYear by remember { mutableIntStateOf(selectedDate.year) }
     var currentMonth by remember { mutableIntStateOf(selectedDate.month) }
 
@@ -48,18 +54,18 @@ fun CalendarRemindersScreen(
     val firstDayOfMonthJalali = JalaliCalendar.JalaliDate(currentYear, currentMonth, 1)
     val startDayOfWeek = JalaliCalendar.getDayOfWeek(firstDayOfMonthJalali) // 0 = Saturday
 
-    val firstHijri = remember(currentYear, currentMonth) {
-        JalaliCalendar.jalaliToHijri(JalaliCalendar.JalaliDate(currentYear, currentMonth, 1))
+    val firstHijri = remember(currentYear, currentMonth, hijriOffset) {
+        JalaliCalendar.jalaliToHijri(JalaliCalendar.JalaliDate(currentYear, currentMonth, 1), hijriOffset)
     }
-    val lastHijri = remember(currentYear, currentMonth, daysInMonth) {
-        JalaliCalendar.jalaliToHijri(JalaliCalendar.JalaliDate(currentYear, currentMonth, daysInMonth))
+    val lastHijri = remember(currentYear, currentMonth, daysInMonth, hijriOffset) {
+        JalaliCalendar.jalaliToHijri(JalaliCalendar.JalaliDate(currentYear, currentMonth, daysInMonth), hijriOffset)
     }
 
-    val selectedDayOccasions = remember(selectedDate) {
-        OccasionsDatabase.getOccasionsForDate(selectedDate.month, selectedDate.day)
+    val selectedDayOccasions = remember(selectedDate, hijriOffset) {
+        OccasionsDatabase.getOccasionsForDay(selectedDate, hijriOffset)
     }
-    val selectedDayHijri = remember(selectedDate) {
-        JalaliCalendar.jalaliToHijri(selectedDate)
+    val selectedDayHijri = remember(selectedDate, hijriOffset) {
+        JalaliCalendar.jalaliToHijri(selectedDate, hijriOffset)
     }
 
     val tasksForSelectedDate = tasks.filter {
@@ -70,9 +76,10 @@ fun CalendarRemindersScreen(
     val monthPrefix = String.format("%04d/%02d", currentYear, currentMonth)
     val monthlyTasks = tasks.filter { it.jalaliDateStr.startsWith(monthPrefix) }
 
-    val monthlyOccasionsByDay = remember(currentMonth, daysInMonth) {
+    val monthlyOccasionsByDay = remember(currentYear, currentMonth, daysInMonth, hijriOffset) {
         (1..daysInMonth).map { day ->
-            val occs = OccasionsDatabase.getOccasionsForDate(currentMonth, day)
+            val dayDate = JalaliCalendar.JalaliDate(currentYear, currentMonth, day)
+            val occs = OccasionsDatabase.getOccasionsForDay(dayDate, hijriOffset)
             day to occs
         }.filter { it.second.isNotEmpty() }
     }
@@ -146,7 +153,54 @@ fun CalendarRemindersScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
+
+                    // Moon Sighting (رویت هلال قمری) Adjuster Chip
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            onClick = { showHijriOffsetDialog = true },
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                            modifier = Modifier.testTag("adjust_hijri_offset_chip")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.NightlightRound,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                val offsetLabel = when {
+                                    hijriOffset == 0 -> "رویت هلال قمری: پیش‌فرض (۰ روز)"
+                                    hijriOffset > 0 -> "رویت هلال قمری: +$hijriOffset روز جلوتر"
+                                    else -> "رویت هلال قمری: ${Math.abs(hijriOffset)}- روز عقب‌تر"
+                                }
+                                Text(
+                                    text = offsetLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "تنظیم",
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
 
                     // Days of Week Header
                     Row(
@@ -188,13 +242,14 @@ fun CalendarRemindersScreen(
                                             it.year == currentYear && it.month == currentMonth && it.day == day
                                         }
 
-                                        val occList = OccasionsDatabase.getOccasionsForDate(currentMonth, day)
+                                        val dayDate = JalaliCalendar.JalaliDate(currentYear, currentMonth, day)
+                                        val occList = OccasionsDatabase.getOccasionsForDay(dayDate, hijriOffset)
                                         val hasOccasion = occList.isNotEmpty()
                                         val isHoliday = occList.any { it.isHoliday }
 
-                                        // Corresponding Hijri Day
-                                        val hDay = remember(currentYear, currentMonth, day) {
-                                            JalaliCalendar.jalaliToHijri(JalaliCalendar.JalaliDate(currentYear, currentMonth, day)).day
+                                        // Corresponding Hijri Day with offset
+                                        val hDay = remember(currentYear, currentMonth, day, hijriOffset) {
+                                            JalaliCalendar.jalaliToHijri(dayDate, hijriOffset).day
                                         }
 
                                         Box(
@@ -401,13 +456,14 @@ fun CalendarRemindersScreen(
 
             // Iterate 1..daysInMonth
             for (day in 1..daysInMonth) {
+                val dayDate = JalaliCalendar.JalaliDate(currentYear, currentMonth, day)
                 val dayStr = String.format("%04d/%02d/%02d", currentYear, currentMonth, day)
-                val dayOccasions = OccasionsDatabase.getOccasionsForDate(currentMonth, day)
+                val dayOccasions = OccasionsDatabase.getOccasionsForDay(dayDate, hijriOffset)
                 val dayTasks = monthlyTasks.filter { it.jalaliDateStr == dayStr }
 
                 if (dayOccasions.isNotEmpty() || dayTasks.isNotEmpty()) {
                     item(key = "day_$day") {
-                        val hDay = JalaliCalendar.jalaliToHijri(JalaliCalendar.JalaliDate(currentYear, currentMonth, day))
+                        val hDay = JalaliCalendar.jalaliToHijri(dayDate, hijriOffset)
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -444,7 +500,7 @@ fun CalendarRemindersScreen(
                                     }
 
                                     TextButton(onClick = {
-                                        viewModel.setSelectedDate(JalaliCalendar.JalaliDate(currentYear, currentMonth, day))
+                                        viewModel.setSelectedDate(dayDate)
                                         calendarViewTab = 0
                                     }) {
                                         Text("مشاهده جزئیات", style = MaterialTheme.typography.labelSmall)
@@ -524,6 +580,115 @@ fun CalendarRemindersScreen(
                     categoryTag = tag,
                     earlyReminderHours = earlyReminderHours
                 )
+            }
+        )
+    }
+
+    // Moon Sighting (رویت هلال قمری) Adjustment Dialog
+    if (showHijriOffsetDialog) {
+        var tempOffset by remember(hijriOffset) { mutableIntStateOf(hijriOffset) }
+        val previewTodayHijri = JalaliCalendar.jalaliToHijri(JalaliCalendar.getTodayJalali(), tempOffset)
+
+        AlertDialog(
+            onDismissRequest = { showHijriOffsetDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.NightlightRound,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("تنظیم رویت هلال و تقویم قمری", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "با توجه به اینکه آغاز ماه‌های قمری بر اساس رویت هلال در ایران یا نظر مراجع ممکن است با تقویم نجومی تا ۲ روز تفاوت داشته باشد، می‌توانید اختلاف روز را تنظیم کنید:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "پیش‌نمایش تاریخ امروز قمری:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = previewTodayHijri.toPersianDigits(),
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    val offsetOptions = listOf(
+                        -2 to "۲- روز (دو روز عقب‌تر)",
+                        -1 to "۱- روز (یک روز عقب‌تر - رویت هلال شایع در ایران)",
+                        0 to "۰ روز (محاسبه استاندارد تقویم)",
+                        1 to "۱+ روز (یک روز جلوتر)",
+                        2 to "۲+ روز (دو روز جلوتر)"
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        offsetOptions.forEach { (offsetVal, label) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { tempOffset = offsetVal }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                RadioButton(
+                                    selected = tempOffset == offsetVal,
+                                    onClick = { tempOffset = offsetVal }
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (tempOffset == offsetVal) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (tempOffset == offsetVal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "با تغییر این مقدار، تمام مناسبت‌های مذهبی (مانند ولادت‌ها، شهادت‌ها و اعیاد) و تاریخ‌های قمری بلافاصله در کل تقویم، داشبورد و رویدادها تطبیق می‌یابند.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateHijriOffset(tempOffset)
+                        showHijriOffsetDialog = false
+                    },
+                    modifier = Modifier.testTag("confirm_hijri_offset_button")
+                ) {
+                    Text("ذخیره و اعمال")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHijriOffsetDialog = false }) {
+                    Text("انصراف")
+                }
             }
         )
     }

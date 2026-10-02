@@ -91,23 +91,7 @@ object OccasionsDatabase {
         Occasion(12, 14, "روز احسان و نیکوکاری - روز درختکاری"),
         Occasion(12, 15, "روز درختکاری و هفته منابع طبیعی"),
         Occasion(12, 22, "روز بزرگداشت شهدا - تاسیس بنیاد شهید"),
-        Occasion(12, 29, "روز ملی شدن صنعت نفت ایران", isHoliday = true),
-
-        // مناسبت‌های مذهبی شاخص (تقریبی/مناسبت شناور در سال)
-        Occasion(1, 10, "مبعث حضرت رسول اکرم (ص)", isReligious = true, isHoliday = true),
-        Occasion(1, 15, "ولادت حضرت قائم (عج) - نیمه شعبان", isReligious = true, isHoliday = true),
-        Occasion(3, 21, "شهادت حضرت علی (ع) - لیله القدر", isReligious = true, isHoliday = true),
-        Occasion(4, 1, "عید سعید فطر", isReligious = true, isHoliday = true),
-        Occasion(4, 25, "شهادت امام جعفر صادق (ع)", isReligious = true, isHoliday = true),
-        Occasion(6, 10, "عید سعید قربان", isReligious = true, isHoliday = true),
-        Occasion(6, 18, "عید سعید غدیر خم", isReligious = true, isHoliday = true),
-        Occasion(7, 9, "تاسوعای حسینی", isReligious = true, isHoliday = true),
-        Occasion(7, 10, "عاشورای حسینی", isReligious = true, isHoliday = true),
-        Occasion(8, 20, "اربعین حسینی", isReligious = true, isHoliday = true),
-        Occasion(8, 28, "رحلت حضرت رسول اکرم (ص) و شهادت امام حسن مجتبی (ع)", isReligious = true, isHoliday = true),
-        Occasion(8, 30, "شهادت امام رضا (ع)", isReligious = true, isHoliday = true),
-        Occasion(12, 3, "شهادت حضرت فاطمه زهرا (س)", isReligious = true, isHoliday = true),
-        Occasion(12, 13, "ولادت حضرت علی (ع) - روز پدر", isReligious = true, isHoliday = true)
+        Occasion(12, 29, "روز ملی شدن صنعت نفت ایران", isHoliday = true)
     )
 
     data class LunarOccasion(
@@ -120,20 +104,22 @@ object OccasionsDatabase {
     val lunarOccasions = listOf(
         // محرم (1)
         LunarOccasion(1, 1, "آغاز سال هجری قمری"),
+        LunarOccasion(1, 2, "ورود کاروان حسینی به کربلا"),
         LunarOccasion(1, 9, "تاسوعای حسینی", isHoliday = true),
         LunarOccasion(1, 10, "عاشورای حسینی", isHoliday = true),
-        LunarOccasion(1, 12, "شهادت حضرت امام سجاد (ع)"),
-        LunarOccasion(1, 25, "شهادت امام زین‌العابدین (ع)"),
+        LunarOccasion(1, 12, "شهادت حضرت امام زین‌العابدین (ع) به روایتی"),
+        LunarOccasion(1, 25, "شهادت حضرت امام زین‌العابدین (ع)"),
 
         // صفر (2)
-        LunarOccasion(2, 7, "ولادت امام موسی کاظم (ع) / شهادت امام حسن مجتبی (ع)"),
+        LunarOccasion(2, 1, "ورود کاروان اهل بیت به شام"),
+        LunarOccasion(2, 7, "ولادت امام موسی کاظم (ع) / شهادت امام حسن مجتبی (ع) به روایتی"),
         LunarOccasion(2, 20, "اربعین حسینی", isHoliday = true),
         LunarOccasion(2, 28, "رحلت رسول اکرم (ص) و شهادت امام حسن مجتبی (ع)", isHoliday = true),
         LunarOccasion(2, 30, "شهادت حضرت امام رضا (ع)", isHoliday = true),
 
         // ربیع‌الاول (3)
         LunarOccasion(3, 1, "لیلة المبیت - هجرت پیامبر اکرم (ص)"),
-        LunarOccasion(3, 8, "شهادت امام حسن عسکری (ع)"),
+        LunarOccasion(3, 8, "شهادت امام حسن عسکری (ع)", isHoliday = true),
         LunarOccasion(3, 9, "آغاز امامت و زعامت حضرت ولی‌عصر (عج)"),
         LunarOccasion(3, 12, "میلاد پیامبر اکرم (ص) به روایت اهل سنت - آغاز هفته وحدت"),
         LunarOccasion(3, 17, "ولادت رسول اکرم (ص) و امام جعفر صادق (ع)", isHoliday = true),
@@ -197,13 +183,9 @@ object OccasionsDatabase {
         LunarOccasion(12, 24, "روز مباهله پیامبر گرامی اسلام (ص)")
     )
 
-    fun getOccasionsForDate(month: Int, day: Int): List<Occasion> {
-        return occasions.filter { it.month == month && it.day == day }
-    }
-
-    fun getOccasionsForDay(jalaliDate: JalaliCalendar.JalaliDate): List<Occasion> {
+    fun getOccasionsForDay(jalaliDate: JalaliCalendar.JalaliDate, hijriOffsetDays: Int = 0): List<Occasion> {
         val solar = occasions.filter { it.month == jalaliDate.month && it.day == jalaliDate.day }
-        val hijri = JalaliCalendar.jalaliToHijri(jalaliDate)
+        val hijri = JalaliCalendar.jalaliToHijri(jalaliDate, hijriOffsetDays)
         val lunar = lunarOccasions.filter { it.hijriMonth == hijri.month && it.hijriDay == hijri.day }.map {
             Occasion(
                 month = jalaliDate.month,
@@ -214,5 +196,14 @@ object OccasionsDatabase {
             )
         }
         return solar + lunar
+    }
+
+    fun getOccasionsForDate(
+        month: Int,
+        day: Int,
+        year: Int = JalaliCalendar.getTodayJalali().year,
+        hijriOffsetDays: Int = 0
+    ): List<Occasion> {
+        return getOccasionsForDay(JalaliCalendar.JalaliDate(year, month, day), hijriOffsetDays)
     }
 }

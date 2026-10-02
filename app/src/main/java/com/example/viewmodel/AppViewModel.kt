@@ -472,6 +472,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateHijriOffset(offsetDays: Int) {
+        viewModelScope.launch {
+            val current = profileDao.getUserProfileOnce() ?: UserProfileEntity()
+            profileDao.insertOrUpdateProfile(current.copy(hijriOffsetDays = offsetDays))
+            triggerAutoCloudSync()
+        }
+    }
+
     // MinIO Cloud Sync Actions (Offline-First)
     fun syncBackupToCloud(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
         _isSyncing.value = true

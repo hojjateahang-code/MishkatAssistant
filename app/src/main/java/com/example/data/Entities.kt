@@ -74,5 +74,6 @@ data class UserProfileEntity(
     val email: String = "info@meshkat.ir",
     val notificationsEnabled: Boolean = true,
     val autoSyncEnabled: Boolean = false,
-    val lastSyncTimestamp: Long = 0L
+    val lastSyncTimestamp: Long = 0L,
+    val hijriOffsetDays: Int = 0 // Offset for Shia moon sighting (-2, -1, 0, +1, +2)
 )

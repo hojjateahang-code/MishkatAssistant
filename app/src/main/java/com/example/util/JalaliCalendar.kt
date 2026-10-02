@@ -250,13 +250,17 @@ object JalaliCalendar {
         return HijriDate(y, m.coerceIn(1, 12), d.coerceIn(1, 30))
     }
 
-    fun jalaliToHijri(jalaliDate: JalaliDate): HijriDate {
+    fun jalaliToHijri(jalaliDate: JalaliDate, offsetDays: Int = 0): HijriDate {
         val cal = jalaliToGregorian(jalaliDate.year, jalaliDate.month, jalaliDate.day)
         val jd = gregorianToJulianDay(
             cal.get(Calendar.YEAR),
             cal.get(Calendar.MONTH) + 1,
             cal.get(Calendar.DAY_OF_MONTH)
-        )
+        ) + offsetDays.toDouble()
         return julianDayToHijri(jd)
+    }
+
+    fun getTodayHijri(offsetDays: Int = 0): HijriDate {
+        return jalaliToHijri(getTodayJalali(), offsetDays)
     }
 }

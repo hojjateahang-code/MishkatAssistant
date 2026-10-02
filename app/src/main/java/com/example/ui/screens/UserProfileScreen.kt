@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -44,6 +45,7 @@ fun UserProfileScreen(
     var isTestingMinio by remember { mutableStateOf(false) }
     var diagnosticResult by remember { mutableStateOf<MinioSyncClient.DiagnosticResult?>(null) }
     var showDiagnosticDialog by remember { mutableStateOf(false) }
+    var showHijriOffsetDialog by remember { mutableStateOf(false) }
 
     val howzehConfig = workplaceConfigs.firstOrNull { it.workplace == "HOWZEH" }
     val mosqueConfig = workplaceConfigs.firstOrNull { it.workplace == "MOSQUE" }
@@ -221,6 +223,66 @@ fun UserProfileScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Moon Sighting (رویت هلال ماه و تقویم قمری) Card
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.NightlightRound,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "تنظیم رویت هلال و تقویم قمری",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        FilledTonalButton(onClick = { showHijriOffsetDialog = true }) {
+                            Text("تغییر اختلاف")
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    val currentOffset = profile?.hijriOffsetDays ?: 0
+                    val todayJalali = JalaliCalendar.getTodayJalali()
+                    val todayHijri = JalaliCalendar.jalaliToHijri(todayJalali, currentOffset)
+
+                    Text(
+                        text = "امروز: ${todayJalali.toPersianDigits()} = ${todayHijri.toPersianDigits()}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    val offsetDesc = when {
+                        currentOffset == 0 -> "بدون اختلاف (مطابق محاسبه نجومی استاندارد)"
+                        currentOffset > 0 -> "+$currentOffset روز جلوتر"
+                        else -> "${Math.abs(currentOffset)}- روز عقب‌تر (رویت هلال در ایران)"
+                    }
+                    Text(
+                        text = "وضعیت تطبیق رویت هلال: $offsetDesc",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
                 }
             }
         }
@@ -653,6 +715,116 @@ fun UserProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showRestoreConfirmDialog = false }) {
+                    Text("انصراف")
+                }
+            }
+        )
+    }
+
+    // Moon Sighting (رویت هلال قمری) Adjustment Dialog
+    if (showHijriOffsetDialog) {
+        val currentOffset = profile?.hijriOffsetDays ?: 0
+        var tempOffset by remember(currentOffset) { mutableIntStateOf(currentOffset) }
+        val previewTodayHijri = JalaliCalendar.jalaliToHijri(JalaliCalendar.getTodayJalali(), tempOffset)
+
+        AlertDialog(
+            onDismissRequest = { showHijriOffsetDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.NightlightRound,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("تنظیم رویت هلال و تقویم قمری", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "با توجه به اینکه آغاز ماه‌های قمری بر اساس رویت هلال در ایران ممکن است با تقویم نجومی تا ۲ روز تفاوت داشته باشد، می‌توانید اختلاف روز را تنظیم کنید:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "پیش‌نمایش تاریخ امروز قمری با تنظیم انتخابی:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.Gray
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = previewTodayHijri.toPersianDigits(),
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    val offsetOptions = listOf(
+                        -2 to "۲- روز (دو روز عقب‌تر)",
+                        -1 to "۱- روز (یک روز عقب‌تر - رویت هلال شایع در ایران)",
+                        0 to "۰ روز (محاسبه استاندارد تقویم)",
+                        1 to "۱+ روز (یک روز جلوتر)",
+                        2 to "۲+ روز (دو روز جلوتر)"
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        offsetOptions.forEach { (offsetVal, label) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { tempOffset = offsetVal }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                RadioButton(
+                                    selected = tempOffset == offsetVal,
+                                    onClick = { tempOffset = offsetVal }
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (tempOffset == offsetVal) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (tempOffset == offsetVal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "با تغییر این مقدار، تمام مناسبت‌های مذهبی (مانند ولادت‌ها، شهادت‌ها و اعیاد) و تاریخ‌های قمری بلافاصله در کل تقویم، داشبورد و رویدادها تطبیق می‌یابند.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateHijriOffset(tempOffset)
+                        showHijriOffsetDialog = false
+                    },
+                    modifier = Modifier.testTag("confirm_profile_hijri_offset_button")
+                ) {
+                    Text("ذخیره و اعمال")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHijriOffsetDialog = false }) {
                     Text("انصراف")
                 }
             }
