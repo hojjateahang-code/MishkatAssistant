@@ -24,7 +24,7 @@ object GeminiAssistantService {
         contextSummary: String
     ): Result<String> = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "your_api_key_here") {
             return@withContext Result.failure(
                 IllegalStateException("کلید API جمینای تنظیم نشده است. لطفاً کلید API را در پانل Secrets تنظیم کنید.")
             )

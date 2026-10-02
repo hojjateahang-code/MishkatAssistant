@@ -11,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,6 +33,7 @@ import com.example.ui.screens.CalendarRemindersScreen
 import com.example.ui.screens.DashboardAttendanceScreen
 import com.example.ui.screens.FinancialAuditScreen
 import com.example.ui.screens.ReportsExportScreen
+import com.example.ui.screens.UserProfileScreen
 import com.example.ui.theme.MishkatTheme
 import com.example.viewmodel.AppViewModel
 
@@ -52,11 +54,12 @@ class MainActivity : ComponentActivity() {
 
 sealed class NavigationItem(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     object Dashboard : NavigationItem("dashboard", "حضور و غیاب", Icons.Default.PunchClock)
-    object Activities : NavigationItem("activities", "ریز فعالیت‌ها", Icons.Default.Assignment)
+    object Activities : NavigationItem("activities", "ریز فعالیت‌ها", Icons.AutoMirrored.Filled.Assignment)
     object Calendar : NavigationItem("calendar", "تقویم و یادآور", Icons.Default.CalendarMonth)
     object Financial : NavigationItem("financial", "دفتر مالی", Icons.Default.AccountBalanceWallet)
     object Reports : NavigationItem("reports", "گزارش‌ها", Icons.Default.Summarize)
     object AiAssistant : NavigationItem("ai_assistant", "دستیار AI", Icons.Default.AutoAwesome)
+    object Profile : NavigationItem("profile", "پروفایل و ابر", Icons.Default.AccountCircle)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,12 +116,26 @@ fun MishkatMainApp(viewModel: AppViewModel) {
                             NavigationItem.Financial.route -> "دفتر حسابرسی و اسناد مالی"
                             NavigationItem.Reports.route -> "گزارش‌های خروجی و پرینت"
                             NavigationItem.AiAssistant.route -> "دستیار هوشمند مشکاه"
+                            NavigationItem.Profile.route -> "پروفایل و همگام‌سازی ابری"
                             else -> "دستیار مشکاه"
                         },
                         fontWeight = FontWeight.Bold
                     )
                 },
                 actions = {
+                    if (currentRoute != NavigationItem.Profile.route) {
+                        IconButton(
+                            onClick = { navController.navigate(NavigationItem.Profile.route) },
+                            modifier = Modifier.testTag("top_profile_icon")
+                        ) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = "پروفایل و پشتیبان‌گیری ابری",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
                     if (currentRoute != NavigationItem.AiAssistant.route) {
                         IconButton(
                             onClick = { navController.navigate(NavigationItem.AiAssistant.route) },
@@ -222,6 +239,13 @@ fun MishkatMainApp(viewModel: AppViewModel) {
                     viewModel = viewModel,
                     messages = aiMessages,
                     isThinking = isAiThinking
+                )
+            }
+
+            composable(NavigationItem.Profile.route) {
+                UserProfileScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() }
                 )
             }
         }

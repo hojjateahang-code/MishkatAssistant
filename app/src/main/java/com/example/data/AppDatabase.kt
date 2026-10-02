@@ -16,9 +16,10 @@ import kotlinx.coroutines.launch
         ActivityLogEntity::class,
         TaskReminderEntity::class,
         FinancialTransactionEntity::class,
-        WorkplaceConfigEntity::class
+        WorkplaceConfigEntity::class,
+        UserProfileEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,6 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskReminderDao(): TaskReminderDao
     abstract fun financialDao(): FinancialDao
     abstract fun workplaceConfigDao(): WorkplaceConfigDao
+    abstract fun userProfileDao(): UserProfileDao
 
     companion object {
         @Volatile
@@ -40,6 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "mishkat_assistant_db"
                 )
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .addCallback(DatabaseCallback(context))
                     .build()
                 INSTANCE = instance
@@ -68,6 +71,19 @@ abstract class AppDatabase : RoomDatabase() {
             )
             db.workplaceConfigDao().insertOrUpdateConfig(
                 WorkplaceConfigEntity(workplace = "MOSQUE", targetDailyMinutes = 180, targetWeeklyMinutes = 900)
+            )
+
+            // User Profile
+            db.userProfileDao().insertOrUpdateProfile(
+                UserProfileEntity(
+                    id = 1,
+                    fullName = "حجت‌الاسلام والمسلمین مهدی رضایی",
+                    roleTitle = "مدیر فرهنگی مسجد و مدرس حوزه علمیه",
+                    phoneNumber = "09123456789",
+                    email = "info@meshkat.ir",
+                    notificationsEnabled = true,
+                    autoSyncEnabled = false
+                )
             )
 
             // Sample Punches

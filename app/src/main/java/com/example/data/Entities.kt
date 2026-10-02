@@ -47,16 +47,31 @@ data class FinancialTransactionEntity(
     val amount: Long, // in Rials
     val category: String, // e.g., "حق‌الزحمه", "خرید تجهیزات", "نذورات و کمک‌های مردمی", "قبوض", "برنامه‌های فرهنگی"
     val accountSource: String = "صندوق اصلی",
+    val partyName: String = "", // طرف حساب / بانی / فروشگاه
     val jalaliDate: String,
     val timestamp: Long = System.currentTimeMillis(),
     val description: String = "",
     val attachmentPath: String? = null, // Image URI or local file path
-    val referenceNumber: String? = null // شماره پیگیری / شماره سند
+    val referenceNumber: String? = null, // شماره پیگیری / شماره سند
+    val isVerified: Boolean = false // وضعیت تایید حسابرس
 )
 
 @Entity(tableName = "workplace_configs")
 data class WorkplaceConfigEntity(
     @PrimaryKey val workplace: String, // "HOWZEH" or "MOSQUE"
     val targetDailyMinutes: Int = 240, // Default 4 hours per day
-    val targetWeeklyMinutes: Int = 1200 // Default 20 hours per week
+    val targetWeeklyMinutes: Int = 1200, // Default 20 hours per week
+    val defaultAccount: String = "صندوق اصلی"
+)
+
+@Entity(tableName = "user_profile")
+data class UserProfileEntity(
+    @PrimaryKey val id: Int = 1,
+    val fullName: String = "حجت‌الاسلام والمسلمین مهدی رضایی",
+    val roleTitle: String = "مدیر فرهنگی مسجد و مدرس حوزه علمیه",
+    val phoneNumber: String = "09123456789",
+    val email: String = "info@meshkat.ir",
+    val notificationsEnabled: Boolean = true,
+    val autoSyncEnabled: Boolean = false,
+    val lastSyncTimestamp: Long = 0L
 )

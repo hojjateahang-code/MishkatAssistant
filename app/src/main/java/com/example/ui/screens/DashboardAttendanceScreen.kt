@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -151,10 +153,10 @@ fun DashboardAttendanceScreen(
                         )
                     }
 
-                    if (isActiveInThisWorkplace && activePunch != null) {
+                    if (isActiveInThisWorkplace) {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "زمان ورود: ${timeFormat.format(Date(activePunch.checkInTime))}",
+                            text = "زمان ورود: ${timeFormat.format(Date(activePunch?.checkInTime ?: 0L))}",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -171,7 +173,7 @@ fun DashboardAttendanceScreen(
                                 .height(48.dp)
                                 .testTag("punch_check_in_button")
                         ) {
-                            Icon(Icons.Default.Login, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("ثبت ورود الان به ${if (selectedWorkplaceTab == "HOWZEH") "حوزه علمیه" else "مسجد"}", fontWeight = FontWeight.Bold)
                         }
@@ -184,7 +186,7 @@ fun DashboardAttendanceScreen(
                                 .height(48.dp)
                                 .testTag("punch_check_out_button")
                         ) {
-                            Icon(Icons.Default.Logout, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("ثبت خروج از ${if (selectedWorkplaceTab == "HOWZEH") "حوزه علمیه" else "مسجد"}", fontWeight = FontWeight.Bold)
                         }

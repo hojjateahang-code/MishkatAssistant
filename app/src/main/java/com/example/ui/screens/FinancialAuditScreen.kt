@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -123,7 +124,7 @@ fun FinancialAuditScreen(
                     }
 
                     Spacer(Modifier.height(12.dp))
-                    Divider()
+                    HorizontalDivider()
                     Spacer(Modifier.height(12.dp))
 
                     Row(
@@ -217,6 +218,10 @@ fun FinancialAuditScreen(
                         Text("سرفصل / محل مصرف: ${tx.category}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text("منبع / حساب: ${tx.accountSource}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
 
+                        if (tx.partyName.isNotBlank()) {
+                            Text("طرف حساب / بانی: ${tx.partyName}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                        }
+
                         if (!tx.referenceNumber.isNull_Blank()) {
                             Text("شماره سند/پیگیری: ${tx.referenceNumber}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                         }
@@ -224,6 +229,32 @@ fun FinancialAuditScreen(
                         if (tx.description.isNotBlank()) {
                             Spacer(Modifier.height(4.dp))
                             Text("بابت / توضیحات: ${tx.description}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Audit Verification Status & Toggle
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.toggleTransactionVerification(tx) }
+                                .background(if (tx.isVerified) Color(0xFF10B981).copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                if (tx.isVerified) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                contentDescription = "وضعیت تایید حسابرس",
+                                tint = if (tx.isVerified) Color(0xFF10B981) else Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (tx.isVerified) "تایید شده توسط حسابرس" else "در انتظار بررسی حسابرس (کلیک جهت تایید)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (tx.isVerified) Color(0xFF10B981) else Color.Gray,
+                                fontWeight = if (tx.isVerified) FontWeight.Bold else FontWeight.Normal
+                            )
                         }
 
                         Spacer(Modifier.height(8.dp))
@@ -241,7 +272,7 @@ fun FinancialAuditScreen(
                                         onClick = { viewingReceiptPath = tx.attachmentPath },
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                     ) {
-                                        Icon(Icons.Default.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(4.dp))
                                         Text("مشاهده رسید پیوست", style = MaterialTheme.typography.bodySmall)
                                     }
@@ -263,7 +294,7 @@ fun FinancialAuditScreen(
         AddFinancialTransactionDialog(
             initialWorkplace = selectedWorkplaceTab,
             onDismiss = { showAddDialog = false },
-            onConfirm = { workplace, type, amount, category, accountSource, desc, attachmentPath, refNum ->
+            onConfirm = { workplace, type, amount, category, accountSource, desc, attachmentPath, refNum, partyName ->
                 showAddDialog = false
                 viewModel.addFinancialTransaction(
                     workplace = workplace,
@@ -274,7 +305,9 @@ fun FinancialAuditScreen(
                     jalaliDate = com.example.util.JalaliCalendar.getTodayJalali().toString(),
                     description = desc,
                     attachmentPath = attachmentPath,
-                    referenceNumber = refNum
+                    referenceNumber = refNum,
+                    partyName = partyName,
+                    isVerified = false
                 )
             }
         )

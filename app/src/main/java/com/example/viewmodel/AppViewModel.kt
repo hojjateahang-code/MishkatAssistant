@@ -9,7 +9,10 @@ import com.example.data.AppDatabase
 import com.example.data.FinancialTransactionEntity
 import com.example.data.PunchLogEntity
 import com.example.data.TaskReminderEntity
+import com.example.data.UserProfileEntity
 import com.example.data.WorkplaceConfigEntity
+import com.example.sync.BackupPackage
+import com.example.sync.MinioSyncClient
 import com.example.util.JalaliCalendar
 import com.example.util.NotificationHelper
 import kotlinx.coroutines.Job
@@ -46,6 +49,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val taskDao = db.taskReminderDao()
     private val financialDao = db.financialDao()
     private val configDao = db.workplaceConfigDao()
+    private val profileDao = db.userProfileDao()
 
     val allPunches = punchDao.getAllPunchLogs().stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
@@ -70,6 +74,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val workplaceConfigs = configDao.getAllConfigs().stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
     )
+
+    val userProfile = profileDao.getUserProfile().stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), null
+    )
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing = _isSyncing.asStateFlow()
+
+    private val _syncStatusMessage = MutableStateFlow<String?>(null)
+    val syncStatusMessage = _syncStatusMessage.asStateFlow()
 
     // Selected Calendar Date
     private val _selectedDate = MutableStateFlow(JalaliCalendar.getTodayJalali())
@@ -283,7 +297,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         jalaliDate: String,
         description: String,
         attachmentPath: String?,
-        referenceNumber: String?
+        referenceNumber: String?,
+        partyName: String = "",
+        isVerified: Boolean = false
     ) {
         viewModelScope.launch {
             financialDao.insertTransaction(
@@ -293,13 +309,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     amount = amount,
                     category = category,
                     accountSource = accountSource,
+                    partyName = partyName,
                     jalaliDate = jalaliDate,
                     timestamp = System.currentTimeMillis(),
                     description = description,
                     attachmentPath = attachmentPath,
-                    referenceNumber = referenceNumber
+                    referenceNumber = referenceNumber,
+                    isVerified = isVerified
                 )
             )
+        }
+    }
+
+    fun toggleTransactionVerification(transaction: FinancialTransactionEntity) {
+        viewModelScope.launch {
+            financialDao.updateTransaction(transaction.copy(isVerified = !transaction.isVerified))
         }
     }
 
@@ -319,6 +343,112 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     targetWeeklyMinutes = targetDailyMinutes * 5
                 )
             )
+        }
+    }
+
+    // User Profile Actions
+    fun updateUserProfile(profile: UserProfileEntity) {
+        viewModelScope.launch {
+            profileDao.insertOrUpdateProfile(profile)
+        }
+    }
+
+    // MinIO Cloud Sync Actions (Offline-First)
+    fun syncBackupToCloud(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        _isSyncing.value = true
+        _syncStatusMessage.value = "در حال تجمیع داده‌ها و ارسال ایمن به MinIO..."
+        viewModelScope.launch {
+            try {
+                val punches = punchDao.getAllPunchLogsOnce()
+                val activities = activityDao.getAllActivitiesOnce()
+                val tasks = taskDao.getAllTasksOnce()
+                val transactions = financialDao.getAllTransactionsOnce()
+                val configs = configDao.getAllConfigsOnce()
+                val profile = profileDao.getUserProfileOnce()
+
+                val backup = BackupPackage(
+                    version = 1,
+                    timestamp = System.currentTimeMillis(),
+                    jalaliDate = JalaliCalendar.getTodayJalali().toString(),
+                    punches = punches,
+                    activities = activities,
+                    tasks = tasks,
+                    transactions = transactions,
+                    configs = configs,
+                    profile = profile
+                )
+                val jsonString = backup.toJsonString()
+                val result = MinioSyncClient.uploadBackup(jsonString)
+
+                if (result.isSuccess) {
+                    val msg = result.getOrNull() ?: "پشتیبان‌گیری ابری با موفقیت انجام شد."
+                    _syncStatusMessage.value = msg
+                    profile?.let {
+                        profileDao.insertOrUpdateProfile(it.copy(lastSyncTimestamp = System.currentTimeMillis()))
+                    }
+                    onComplete(true, msg)
+                } else {
+                    val errMsg = result.exceptionOrNull()?.localizedMessage ?: "خطا در برقراری ارتباط با سرور MinIO"
+                    _syncStatusMessage.value = errMsg
+                    onComplete(false, errMsg)
+                }
+            } catch (e: Exception) {
+                val errMsg = "خطا در عملیات پشتیبان‌گیری: ${e.localizedMessage}"
+                _syncStatusMessage.value = errMsg
+                onComplete(false, errMsg)
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    fun restoreBackupFromCloud(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        _isSyncing.value = true
+        _syncStatusMessage.value = "در حال دریافت فایل پشتیبان از سرور MinIO..."
+        viewModelScope.launch {
+            try {
+                val result = MinioSyncClient.downloadLatestBackup()
+                if (result.isSuccess) {
+                    val jsonStr = result.getOrThrow()
+                    val backup = BackupPackage.fromJsonString(jsonStr)
+
+                    // Clear and restore tables
+                    punchDao.clearAll()
+                    punchDao.insertAll(backup.punches)
+
+                    activityDao.clearAll()
+                    activityDao.insertAll(backup.activities)
+
+                    taskDao.clearAll()
+                    taskDao.insertAll(backup.tasks)
+
+                    financialDao.clearAll()
+                    financialDao.insertAll(backup.transactions)
+
+                    if (backup.configs.isNotEmpty()) {
+                        configDao.clearAll()
+                        configDao.insertAll(backup.configs)
+                    }
+
+                    backup.profile?.let {
+                        profileDao.insertOrUpdateProfile(it.copy(lastSyncTimestamp = System.currentTimeMillis()))
+                    }
+
+                    val msg = "بازیابی اطلاعات از ابر با موفقیت انجام شد (${backup.punches.size} تردد، ${backup.transactions.size} سند مالی)."
+                    _syncStatusMessage.value = msg
+                    onComplete(true, msg)
+                } else {
+                    val errMsg = result.exceptionOrNull()?.localizedMessage ?: "خطا در دریافت اطلاعات از سرور MinIO"
+                    _syncStatusMessage.value = errMsg
+                    onComplete(false, errMsg)
+                }
+            } catch (e: Exception) {
+                val errMsg = "خطا در بازیابی اطلاعات: ${e.localizedMessage}"
+                _syncStatusMessage.value = errMsg
+                onComplete(false, errMsg)
+            } finally {
+                _isSyncing.value = false
+            }
         }
     }
 

@@ -256,13 +256,14 @@ fun AddTaskReminderDialog(
 fun AddFinancialTransactionDialog(
     initialWorkplace: String = "HOWZEH",
     onDismiss: () -> Unit,
-    onConfirm: (workplace: String, type: String, amount: Long, category: String, accountSource: String, desc: String, attachmentPath: String?, refNum: String?) -> Unit
+    onConfirm: (workplace: String, type: String, amount: Long, category: String, accountSource: String, desc: String, attachmentPath: String?, refNum: String?, partyName: String) -> Unit
 ) {
     var workplace by remember { mutableStateOf(initialWorkplace) }
     var type by remember { mutableStateOf("EXPENSE") } // INCOME / EXPENSE
     var amountText by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("برنامه‌های فرهنگی") }
     var accountSource by remember { mutableStateOf("صندوق اصلی") }
+    var partyName by remember { mutableStateOf("") }
     var desc by remember { mutableStateOf("") }
     var refNum by remember { mutableStateOf("") }
     var attachmentUri by remember { mutableStateOf<Uri?>(null) }
@@ -362,6 +363,14 @@ fun AddFinancialTransactionDialog(
                 )
 
                 OutlinedTextField(
+                    value = partyName,
+                    onValueChange = { partyName = it },
+                    label = { Text("طرف حساب / بانی / فروشگاه (اختیاری)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
                     value = refNum,
                     onValueChange = { refNum = it },
                     label = { Text("شماره پیگیری / شماره فاکتور (اختیاری)") },
@@ -416,7 +425,7 @@ fun AddFinancialTransactionDialog(
             Button(
                 onClick = {
                     val amount = amountText.toLongOrNull() ?: 0L
-                    onConfirm(workplace, type, amount, category, accountSource, desc, attachmentUri?.toString(), refNum)
+                    onConfirm(workplace, type, amount, category, accountSource, desc, attachmentUri?.toString(), refNum, partyName)
                 },
                 modifier = Modifier.testTag("submit_financial_tx_button")
             ) {
