@@ -98,14 +98,20 @@ object MinioSyncClient {
             val code = response.code
             val isSuccess = response.isSuccessful || code == 200 || code == 404 // 404 means server reached and authenticated, just key not found yet
 
-            val respBodyPreview = response.body?.string()?.take(300) ?: ""
+            val rawBody = response.body?.string() ?: ""
+            val respBodyPreview = rawBody.take(400)
 
-            val msg = if (isSuccess) {
-                "اتصال با موفقیت برقرار شد. سرور در دسترس و احراز هویت SigV4 تایید گردید."
-            } else if (code == 403) {
-                "دسترسی رد شد (۴۰۳ Forbidden). احتمالاً AccessKey یا SecretKey اشتباه است."
-            } else {
-                "خطای سرور با کد HTTP $code"
+            // Extract S3 XML Error Code and Message if present
+            val errCode = Regex("<Code>(.*?)</Code>").find(rawBody)?.groupValues?.get(1) ?: ""
+            val errMessage = Regex("<Message>(.*?)</Message>").find(rawBody)?.groupValues?.get(1) ?: ""
+
+            val msg = when {
+                isSuccess -> "اتصال ابری با موفقیت برقرار شد. سرور در دسترس و احراز هویت SigV4 تایید گردید."
+                errCode == "InvalidAccessKeyId" -> "خطای شناسه (InvalidAccessKeyId): کلید AccessKey وارد شده در سرور مینیو یافت نشد. لطفاً در پنل مینیو یک Access Key جدید ایجاد کنید."
+                errCode == "SignatureDoesNotMatch" -> "خطای امضا (SignatureDoesNotMatch): کلید AccessKey معتبر است اما SecretKey اشتباه است یا با این AccessKey مطابقت ندارد."
+                errCode == "AccessDenied" -> "خطای دسترسی (AccessDenied): کلید معتبر است اما پالیسی باکت یا کاربر اجازه دسترسی به این مسیر را نمی‌دهد."
+                code == 403 -> "دسترسی رد شد (۴۰۳ Forbidden): $errMessage ($errCode)"
+                else -> "خطای سرور با کد HTTP $code: $errMessage"
             }
 
             DiagnosticResult(
@@ -115,7 +121,7 @@ object MinioSyncClient {
                 latencyMs = latency,
                 httpCode = code,
                 message = msg,
-                details = "پاسخ سرور ($code): $respBodyPreview"
+                details = if (errCode.isNotBlank()) "کد خطای S3: $errCode\nپیام سرور: $errMessage" else "پاسخ سرور ($code): $respBodyPreview"
             )
         } catch (e: Exception) {
             val latency = System.currentTimeMillis() - startTime
