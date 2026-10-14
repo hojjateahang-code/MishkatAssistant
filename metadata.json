@@ -1,0 +1,6 @@
+{
+  "name": "مشکاه | دستیار شغلی و مالی",
+  "description": "دستیار مدیریت ساعت حضور و غیاب، ریز فعالیت‌ها، یادآورها، تقویم مناسبت‌ها و دفتر حسابرسی مالی حوزه و مسجد",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
