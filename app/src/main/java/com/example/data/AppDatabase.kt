@@ -19,9 +19,11 @@ import kotlinx.coroutines.launch
         WorkplaceConfigEntity::class,
         UserProfileEntity::class,
         NoteEntity::class,
-        LeaveEntity::class
+        LeaveEntity::class,
+        HolidayEntity::class,
+        MissionEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +36,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userProfileDao(): UserProfileDao
     abstract fun noteDao(): NoteDao
     abstract fun leaveDao(): LeaveDao
+    abstract fun holidayDao(): HolidayDao
+    abstract fun missionDao(): MissionDao
+
 
     companion object {
         @Volatile

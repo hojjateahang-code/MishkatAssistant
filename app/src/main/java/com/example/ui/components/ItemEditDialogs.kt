@@ -20,10 +20,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.ActivityLogEntity
+import com.example.data.HolidayEntity
 import com.example.data.LeaveEntity
+import com.example.data.MissionEntity
 import com.example.data.NoteEntity
 import com.example.data.PunchLogEntity
 import com.example.data.TaskReminderEntity
+
 import com.example.util.JalaliCalendar
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -540,3 +543,296 @@ fun AddOrEditLeaveDialog(
         }
     )
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddOrEditMissionDialog(
+    initialMission: MissionEntity? = null,
+    initialDate: String = JalaliCalendar.getTodayJalali().toString(),
+    onDismiss: () -> Unit,
+    onConfirm: (workplace: String, title: String, jalaliDate: String, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, durationMins: Int, description: String) -> Unit,
+    onDelete: ((MissionEntity) -> Unit)? = null
+) {
+    var workplace by remember { mutableStateOf(initialMission?.workplace ?: "HOWZEH") }
+    var title by remember { mutableStateOf(initialMission?.title ?: "") }
+    var jalaliDate by remember { mutableStateOf(initialMission?.jalaliDate ?: initialDate) }
+
+    var startHourText by remember { mutableStateOf((initialMission?.startHour ?: 8).toString()) }
+    var startMinText by remember { mutableStateOf((initialMission?.startMinute ?: 0).toString()) }
+    var endHourText by remember { mutableStateOf((initialMission?.endHour ?: 12).toString()) }
+    var endMinText by remember { mutableStateOf((initialMission?.endMinute ?: 0).toString()) }
+
+    var durationText by remember { mutableStateOf((initialMission?.durationMinutes ?: 240).toString()) }
+    var description by remember { mutableStateOf(initialMission?.description ?: "") }
+
+    val presetMissionTitles = listOf(
+        "جلسه در مرکز مدیریت حوزه علمیه",
+        "جلسه شورای هماهنگی و تبلیغات",
+        "مأموریت فرهنگی و تبلیغی خارج از حوزه",
+        "پیگیری امور اجرایی و عمرانی",
+        "دیدار با مسئولین و نهادهای فرهنگی",
+        "سفر کاری و همایش استانی"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (initialMission == null) "ثبت مأموریت کاری (محاسبه به عنوان حضور)" else "ویرایش مأموریت", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(10.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "ساعات مأموریت کاری خارج از مجموعه، به عنوان ساعات کارکرد موظفی معتبر محاسبه می‌گردد.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                Text("محل مأموریت:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = workplace == "HOWZEH",
+                        onClick = { workplace = "HOWZEH" },
+                        label = { Text("حوزه علمیه") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = workplace == "MOSQUE",
+                        onClick = { workplace = "MOSQUE" },
+                        label = { Text("مسجد") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("عنوان مأموریت / جلسه") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Text("عناوین متداول:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(presetMissionTitles) { item ->
+                        SuggestionChip(
+                            onClick = { title = item },
+                            label = { Text(item, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = jalaliDate,
+                    onValueChange = { jalaliDate = it },
+                    label = { Text("تاریخ مأموریت (1405/07/03)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Text("بازه زمانی مأموریت:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = startHourText,
+                        onValueChange = { if (it.length <= 2) startHourText = it },
+                        label = { Text("ساعت شروع") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = startMinText,
+                        onValueChange = { if (it.length <= 2) startMinText = it },
+                        label = { Text("دقیقه شروع") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = endHourText,
+                        onValueChange = { if (it.length <= 2) endHourText = it },
+                        label = { Text("ساعت پایان") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = endMinText,
+                        onValueChange = { if (it.length <= 2) endMinText = it },
+                        label = { Text("دقیقه پایان") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                OutlinedTextField(
+                    value = durationText,
+                    onValueChange = { durationText = it },
+                    label = { Text("مدت مأموریت (به دقیقه)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("توضیحات و دستاورد مأموریت") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+
+                if (initialMission != null && onDelete != null) {
+                    OutlinedButton(
+                        onClick = { onDelete(initialMission); onDismiss() },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("حذف این مأموریت")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val sH = startHourText.toIntOrNull()?.coerceIn(0, 23) ?: 8
+                    val sM = startMinText.toIntOrNull()?.coerceIn(0, 59) ?: 0
+                    val eH = endHourText.toIntOrNull()?.coerceIn(0, 23) ?: 12
+                    val eM = endMinText.toIntOrNull()?.coerceIn(0, 59) ?: 0
+                    val dur = durationText.toIntOrNull() ?: 240
+                    onConfirm(workplace, title.ifBlank { "مأموریت اداری" }, jalaliDate, sH, sM, eH, eM, dur, description)
+                }
+            ) {
+                Text("ثبت مأموریت")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("انصراف") }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddOrEditHolidayDialog(
+    initialDate: String = JalaliCalendar.getTodayJalali().toString(),
+    existingHoliday: HolidayEntity? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (jalaliDate: String, title: String) -> Unit,
+    onDelete: ((HolidayEntity) -> Unit)? = null
+) {
+    var jalaliDate by remember { mutableStateOf(existingHoliday?.jalaliDate ?: initialDate) }
+    var title by remember { mutableStateOf(existingHoliday?.title ?: "تعطیل رسمی") }
+
+    val presetHolidays = listOf(
+        "تعطیل رسمی تقویمی",
+        "شهادت امام رضا (ع)",
+        "شهادت حضرت فاطمه (س)",
+        "ارتحال امام خمینی (ره)",
+        "تعطیلی به علت برودت هوا و یخبندان",
+        "تعطیلی اداری اضطراری"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (existingHoliday == null) "ثبت روز تعطیل (معاف از موظفی)" else "ویرایش تعطیلی", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(10.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "در روزهای ثبت‌شده به عنوان تعطیل، ساعت موظفی صفر منظور شده و هیچ‌گونه کسری کاری متوجه شما نخواهد بود.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = jalaliDate,
+                    onValueChange = { jalaliDate = it },
+                    label = { Text("تاریخ روز تعطیل (1405/07/03)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("عنوان یا مناسبت تعطیلی") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Text("عناوین پیشنهادی:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(presetHolidays) { item ->
+                        SuggestionChip(
+                            onClick = { title = item },
+                            label = { Text(item, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+
+                if (existingHoliday != null && onDelete != null) {
+                    OutlinedButton(
+                        onClick = { onDelete(existingHoliday); onDismiss() },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("حذف این روز تعطیل (بازگشت به روز عادی)")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(jalaliDate, title.ifBlank { "تعطیل رسمی" })
+                }
+            ) {
+                Text("ثبت تعطیلی")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("انصراف") }
+        }
+    )
+}
+

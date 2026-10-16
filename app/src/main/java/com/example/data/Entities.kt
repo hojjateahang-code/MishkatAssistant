@@ -105,3 +105,27 @@ data class UserProfileEntity(
     val lastSyncTimestamp: Long = 0L,
     val hijriOffsetDays: Int = 0 // Offset for Shia moon sighting (-2, -1, 0, +1, +2)
 )
+
+@Entity(tableName = "holiday_logs")
+data class HolidayEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val jalaliDate: String, // e.g. "1405/07/03"
+    val title: String = "تعطیل رسمی",
+    val isOffDay: Boolean = true
+)
+
+@Entity(tableName = "mission_logs")
+data class MissionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val workplace: String = "HOWZEH", // "HOWZEH" or "MOSQUE"
+    val title: String, // e.g. "جلسه در مرکز خدمات", "سفر کاری تبلیغی"
+    val jalaliDate: String, // e.g. "1405/07/03"
+    val startHour: Int = 8,
+    val startMinute: Int = 0,
+    val endHour: Int = 12,
+    val endMinute: Int = 0,
+    val durationMinutes: Int = 240, // duration in minutes
+    val description: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+

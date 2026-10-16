@@ -260,7 +260,50 @@ object JalaliCalendar {
         return julianDayToHijri(jd)
     }
 
-    fun getTodayHijri(offsetDays: Int = 0): HijriDate {
-        return jalaliToHijri(getTodayJalali(), offsetDays)
+    fun parseJalali(dateStr: String): JalaliDate? {
+        val clean = fromPersianDigits(dateStr.trim())
+        val parts = clean.split("/")
+        if (parts.size == 3) {
+            val y = parts[0].toIntOrNull() ?: return null
+            val m = parts[1].toIntOrNull() ?: return null
+            val d = parts[2].toIntOrNull() ?: return null
+            return JalaliDate(y, m, d)
+        }
+        return null
+    }
+
+    fun isFriday(dateStr: String): Boolean {
+        val jd = parseJalali(dateStr) ?: return false
+        return getDayOfWeek(jd) == 6
+    }
+
+    fun getWeekdayName(dateStr: String): String {
+        val jd = parseJalali(dateStr) ?: return ""
+        val dayIdx = getDayOfWeek(jd)
+        return weekDays.getOrElse(dayIdx) { "" }
+    }
+
+    fun compareJalaliDates(d1: String, d2: String): Int {
+        val jd1 = parseJalali(d1) ?: return d1.compareTo(d2)
+        val jd2 = parseJalali(d2) ?: return d1.compareTo(d2)
+        if (jd1.year != jd2.year) return jd1.year.compareTo(jd2.year)
+        if (jd1.month != jd2.month) return jd1.month.compareTo(jd2.month)
+        return jd1.day.compareTo(jd2.day)
+    }
+
+    fun getDaysAgoJalali(days: Int): JalaliDate {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, -days)
+        return gregorianToJalali(
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH) + 1,
+            cal.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    fun getFirstDayOfCurrentJalaliMonth(): JalaliDate {
+        val today = getTodayJalali()
+        return JalaliDate(today.year, today.month, 1)
     }
 }
+

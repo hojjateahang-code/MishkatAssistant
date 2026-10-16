@@ -2,8 +2,10 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -12,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.PunchLogEntity
+import com.example.ui.components.AddOrEditHolidayDialog
+import com.example.ui.components.AddOrEditMissionDialog
 import com.example.util.JalaliCalendar
 import com.example.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
@@ -46,10 +51,16 @@ fun DashboardAttendanceScreen(
     var showCheckInWithNoteDialog by remember { mutableStateOf(false) }
     var showManualPastPunchDialog by remember { mutableStateOf(false) }
     var showAddLeaveDialog by remember { mutableStateOf(false) }
+    var showAddMissionDialog by remember { mutableStateOf(false) }
+    var showAddHolidayDialog by remember { mutableStateOf(false) }
+    var expandedDates by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var isInitializedExpanded by remember { mutableStateOf(false) }
 
     val workplaceConfigs by viewModel.workplaceConfigs.collectAsStateWithLifecycle()
     val activities by viewModel.allActivities.collectAsStateWithLifecycle()
     val allLeaves by viewModel.allLeaves.collectAsStateWithLifecycle()
+    val allMissions by viewModel.allMissions.collectAsStateWithLifecycle()
+    val allHolidays by viewModel.allHolidays.collectAsStateWithLifecycle()
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val hijriOffset = userProfile?.hijriOffsetDays ?: 0
 
@@ -57,41 +68,48 @@ fun DashboardAttendanceScreen(
     val todayHijri = remember(todayJalali, hijriOffset) { JalaliCalendar.jalaliToHijri(todayJalali, hijriOffset) }
     val todayStr = remember { todayJalali.toString() }
 
-    // Dynamic Target Daily Minutes from Room Database
-    val currentConfig = workplaceConfigs.firstOrNull { it.workplace == selectedWorkplaceTab }
-    val targetDailyMins = currentConfig?.targetDailyMinutes?.toLong()
-        ?: if (selectedWorkplaceTab == "HOWZEH") 240L else 180L
-
-    // Calculate Today's Total Gross Minutes for Selected Workplace
-    val todayPunchesForWorkplace = punches.filter {
-        it.workplace == selectedWorkplaceTab && it.jalaliDate == todayStr
+    val todayCalculation = remember(todayStr, selectedWorkplaceTab, punches, activities, allLeaves, allMissions, allHolidays, workplaceConfigs) {
+        viewModel.calculateDayAttendance(
+            dateStr = todayStr,
+            workplace = selectedWorkplaceTab,
+            punchesList = punches,
+            activitiesList = activities,
+            leavesList = allLeaves,
+            missionsList = allMissions,
+            holidaysList = allHolidays,
+            configsList = workplaceConfigs
+        )
     }
 
-    val todayLeavesForWorkplace = allLeaves.filter {
-        it.workplace == selectedWorkplaceTab && it.jalaliDate == todayStr
-    }
-    val leaveMinutesToday = todayLeavesForWorkplace.sumOf { it.durationMinutes.toLong() }
-
-    val grossPresentMinutesToday = todayPunchesForWorkplace.sumOf { p ->
-        val endTime = p.checkOutTime ?: System.currentTimeMillis()
-        (endTime - p.checkInTime) / 60000
-    }
-
-    // Howzeh Teaching and Study Deductions
-    val (teachingDeductionMins, studyDeductionMins) = remember(activities, todayStr, selectedWorkplaceTab) {
-        if (selectedWorkplaceTab == "HOWZEH") {
-            viewModel.getTeachingAndStudyDeductions(todayStr)
-        } else {
-            Pair(0, 0)
-        }
-    }
-    val totalDeductionMins = teachingDeductionMins + studyDeductionMins
-    val netPresentMinutesToday = maxOf(0L, grossPresentMinutesToday - totalDeductionMins + leaveMinutesToday)
-
-    val diffMins = netPresentMinutesToday - targetDailyMins
-    val isDeficit = diffMins < 0
+    val grossPresentMinutesToday = todayCalculation.grossPresenceMinutes
+    val teachingDeductionMins = todayCalculation.teachingDeductionMinutes
+    val studyDeductionMins = todayCalculation.studyDeductionMinutes
+    val restDeductionMins = todayCalculation.restDeductionMinutes
+    val totalDeductionMins = todayCalculation.totalDeductionMinutes
+    val leaveMinutesToday = todayCalculation.leaveMinutes
+    val missionMinutesToday = todayCalculation.missionMinutes
+    val netPresentMinutesToday = todayCalculation.netEffectiveMinutes
+    val targetDailyMins = todayCalculation.targetDailyMinutes
+    val diffMins = todayCalculation.diffMinutes
+    val isDeficit = diffMins < 0 && !todayCalculation.isHoliday
 
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+
+    val historyList = remember(punches, selectedWorkplaceTab) {
+        punches.filter { it.workplace == selectedWorkplaceTab }
+    }
+    val punchesByDate = remember(historyList) {
+        historyList.groupBy { it.jalaliDate }
+            .toList()
+            .sortedWith { a, b -> JalaliCalendar.compareJalaliDates(b.first, a.first) }
+    }
+
+    LaunchedEffect(punchesByDate) {
+        if (!isInitializedExpanded && punchesByDate.isNotEmpty()) {
+            expandedDates = setOf(todayStr)
+            isInitializedExpanded = true
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -426,7 +444,7 @@ fun DashboardAttendanceScreen(
             }
         }
 
-        // Section Title: History of Punches
+        // Section Title: History of Punches & Quick Actions
         item {
             Column {
                 Row(
@@ -435,37 +453,72 @@ fun DashboardAttendanceScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "تاریخچه ترددهای ثبت‌شده",
+                        text = "تاریخچه ترددها (دسته‌بندی روزانه)",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { showAddLeaveDialog = true },
-                            modifier = Modifier.testTag("add_leave_button")
-                        ) {
-                            Icon(Icons.Default.BeachAccess, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("ثبت مرخصی", style = MaterialTheme.typography.labelSmall)
-                        }
-                        FilledTonalButton(
-                            onClick = { showManualPastPunchDialog = true },
-                            modifier = Modifier.testTag("add_manual_punch_button")
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("ثبت دستی تردد", style = MaterialTheme.typography.labelSmall)
-                        }
-                        IconButton(onClick = onOpenAiAssistant) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = "تحلیل هوشمند", tint = MaterialTheme.colorScheme.primary)
-                        }
+                    IconButton(onClick = onOpenAiAssistant) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = "تحلیل هوشمند", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
+
+                // Action Buttons Row (Manual Punch, Leave, Mission, Holiday)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = { showManualPastPunchDialog = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("add_manual_punch_button"),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("ثبت تردد", style = MaterialTheme.typography.labelSmall)
+                    }
+
+                    OutlinedButton(
+                        onClick = { showAddLeaveDialog = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("add_leave_button"),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.BeachAccess, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("مرخصی", style = MaterialTheme.typography.labelSmall)
+                    }
+
+                    OutlinedButton(
+                        onClick = { showAddMissionDialog = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("add_mission_button"),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.BusinessCenter, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("مأموریت", style = MaterialTheme.typography.labelSmall)
+                    }
+
+                    OutlinedButton(
+                        onClick = { showAddHolidayDialog = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("add_holiday_button"),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.EventBusy, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("تعطیلی", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -478,7 +531,7 @@ fun DashboardAttendanceScreen(
                         Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            text = "ستون توضیحات تردد در گزارشات: کاملاً مستقل از ریز فعالیت‌ها بوده و جهت ثبت علل حضور، جلسات، مأموریت‌ها یا تأخیر موجه در PDF است.",
+                            text = "ستون توضیحات تردد کاملاً مستقل از فعالیت‌هاست. روزها برای جلوگیری از اسکرول طولانی گروه‌بندی شده‌اند.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -487,8 +540,7 @@ fun DashboardAttendanceScreen(
             }
         }
 
-        val historyList = punches.filter { it.workplace == selectedWorkplaceTab }
-        if (historyList.isEmpty()) {
+        if (punchesByDate.isEmpty()) {
             item {
                 Text(
                     "هنوز ترددی برای این محل کار ثبت نشده است.",
@@ -497,65 +549,207 @@ fun DashboardAttendanceScreen(
                 )
             }
         } else {
-            items(historyList, key = { it.id }) { punch ->
-                Card(
+            // Header with Expand/Collapse All
+            item {
+                val allExpanded = expandedDates.containsAll(punchesByDate.map { it.first })
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Text(
+                        text = "${historyList.size} تردد در ${punchesByDate.size} روز",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    TextButton(
+                        onClick = {
+                            expandedDates = if (allExpanded) emptySet() else punchesByDate.map { it.first }.toSet()
+                        }
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "تاریخ: ${punch.jalaliDate}",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            val inStr = timeFormat.format(Date(punch.checkInTime))
-                            val outStr = if (punch.checkOutTime != null) timeFormat.format(Date(punch.checkOutTime)) else "در حال حضور"
-                            Text(
-                                text = "ورود: $inStr  |  خروج: $outStr",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (!punch.note.isNull_Blank()) {
-                                Spacer(Modifier.height(6.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        Icon(
+                            imageVector = if (allExpanded) Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (allExpanded) "بستن همه" else "باز کردن همه", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+
+            // Grouped By Date Accordion Cards
+            punchesByDate.forEach { (dateStr, dayPunches) ->
+                item(key = "day_group_$dateStr") {
+                    val isExpanded = expandedDates.contains(dateStr)
+                    val isToday = dateStr == todayStr
+                    val dayName = remember(dateStr) { JalaliCalendar.getWeekdayName(dateStr) }
+                    val dayTotalMins = remember(dayPunches) {
+                        dayPunches.sumOf { p ->
+                            val end = p.checkOutTime ?: System.currentTimeMillis()
+                            (end - p.checkInTime) / 60000
+                        }
+                    }
+                    val isDayHoliday = remember(dateStr, allHolidays) {
+                        JalaliCalendar.isFriday(dateStr) || allHolidays.any { it.jalaliDate == dateStr && it.isOffDay }
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = when {
+                                isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                isDayHoliday -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)
+                                else -> MaterialTheme.colorScheme.surface
+                            }
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        expandedDates = if (isExpanded) {
+                                            expandedDates - dateStr
+                                        } else {
+                                            expandedDates + dateStr
+                                        }
+                                    },
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "$dayName $dateStr",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    if (isToday) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        ) {
+                                            Text(
+                                                text = "امروز",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    if (isDayHoliday && !isToday) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                                        ) {
+                                            Text(
+                                                text = "تعطیل",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "${dayTotalMins / 60}س ${dayTotalMins % 60}د",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
                                     ) {
-                                        Icon(Icons.Default.Notes, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(Modifier.width(4.dp))
                                         Text(
-                                            text = "توضیحات: ${punch.note}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            text = "${dayPunches.size} نوبت",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
                                 }
                             }
-                        }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { punchToFullEdit = punch }) {
-                                Icon(Icons.Default.Edit, contentDescription = "ویرایش کامل ساعت و مشخصات تردد", tint = MaterialTheme.colorScheme.primary)
-                            }
-                            IconButton(onClick = { punchToEditNote = punch }) {
-                                Icon(Icons.Default.EditNote, contentDescription = "ویرایش سریع توضیحات", tint = MaterialTheme.colorScheme.secondary)
-                            }
-                            IconButton(onClick = { viewModel.deletePunch(punch) }) {
-                                Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = Color.Gray)
+                            AnimatedVisibility(visible = isExpanded) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    dayPunches.forEach { punch ->
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(10.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    val inStr = timeFormat.format(Date(punch.checkInTime))
+                                                    val outStr = if (punch.checkOutTime != null) timeFormat.format(Date(punch.checkOutTime)) else "در حال حضور"
+                                                    val durMins = if (punch.checkOutTime != null) ((punch.checkOutTime - punch.checkInTime) / 60000) else 0L
+
+                                                    Text(
+                                                        text = "ورود: $inStr  |  خروج: $outStr",
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                    Text(
+                                                        text = "مدت حضور: ${durMins / 60} ساعت و ${durMins % 60} دقیقه",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    if (!punch.note.isNull_Blank()) {
+                                                        Spacer(Modifier.height(4.dp))
+                                                        Surface(
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                                        ) {
+                                                            Text(
+                                                                text = "یادداشت: ${punch.note}",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    IconButton(onClick = { punchToFullEdit = punch }) {
+                                                        Icon(Icons.Default.Edit, contentDescription = "ویرایش تردد", tint = MaterialTheme.colorScheme.primary)
+                                                    }
+                                                    IconButton(onClick = { punchToEditNote = punch }) {
+                                                        Icon(Icons.Default.EditNote, contentDescription = "ویرایش یادداشت", tint = MaterialTheme.colorScheme.secondary)
+                                                    }
+                                                    IconButton(onClick = { viewModel.deletePunch(punch) }) {
+                                                        Icon(Icons.Default.DeleteOutline, contentDescription = "حذف تردد", tint = Color.Gray)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1018,6 +1212,42 @@ fun DashboardAttendanceScreen(
                     reason = reason
                 )
                 showAddLeaveDialog = false
+            }
+        )
+    }
+
+    // Mission Registration Dialog
+    if (showAddMissionDialog) {
+        com.example.ui.components.AddOrEditMissionDialog(
+            initialMission = null,
+            initialDate = todayStr,
+            onDismiss = { showAddMissionDialog = false },
+            onConfirm = { workplace, title, jalaliDate, startH, startM, endH, endM, durMins, desc ->
+                viewModel.addMission(
+                    workplace = workplace,
+                    title = title,
+                    jalaliDate = jalaliDate,
+                    startHour = startH,
+                    startMinute = startM,
+                    endHour = endH,
+                    endMinute = endM,
+                    durationMinutes = durMins,
+                    description = desc
+                )
+                showAddMissionDialog = false
+            }
+        )
+    }
+
+    // Holiday Registration Dialog
+    if (showAddHolidayDialog) {
+        com.example.ui.components.AddOrEditHolidayDialog(
+            initialDate = todayStr,
+            existingHoliday = null,
+            onDismiss = { showAddHolidayDialog = false },
+            onConfirm = { jalaliDate, title ->
+                viewModel.addHoliday(jalaliDate, title)
+                showAddHolidayDialog = false
             }
         )
     }

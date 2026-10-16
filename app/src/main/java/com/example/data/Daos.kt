@@ -217,3 +217,58 @@ interface LeaveDao {
     @Query("DELETE FROM leave_logs")
     suspend fun clearAll()
 }
+
+@Dao
+interface HolidayDao {
+    @Query("SELECT * FROM holiday_logs ORDER BY jalaliDate DESC")
+    fun getAllHolidays(): Flow<List<HolidayEntity>>
+
+    @Query("SELECT * FROM holiday_logs ORDER BY jalaliDate DESC")
+    suspend fun getAllHolidaysOnce(): List<HolidayEntity>
+
+    @Query("SELECT * FROM holiday_logs WHERE jalaliDate = :dateStr LIMIT 1")
+    suspend fun getHolidayForDate(dateStr: String): HolidayEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertHoliday(holiday: HolidayEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(holidays: List<HolidayEntity>)
+
+    @Delete
+    suspend fun deleteHoliday(holiday: HolidayEntity)
+
+    @Query("DELETE FROM holiday_logs")
+    suspend fun clearAll()
+}
+
+@Dao
+interface MissionDao {
+    @Query("SELECT * FROM mission_logs ORDER BY timestamp DESC")
+    fun getAllMissions(): Flow<List<MissionEntity>>
+
+    @Query("SELECT * FROM mission_logs ORDER BY timestamp DESC")
+    suspend fun getAllMissionsOnce(): List<MissionEntity>
+
+    @Query("SELECT * FROM mission_logs WHERE jalaliDate = :dateStr ORDER BY timestamp DESC")
+    fun getMissionsForDate(dateStr: String): Flow<List<MissionEntity>>
+
+    @Query("SELECT * FROM mission_logs WHERE workplace = :workplace ORDER BY timestamp DESC")
+    fun getMissionsByWorkplace(workplace: String): Flow<List<MissionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMission(mission: MissionEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(missions: List<MissionEntity>)
+
+    @Update
+    suspend fun updateMission(mission: MissionEntity)
+
+    @Delete
+    suspend fun deleteMission(mission: MissionEntity)
+
+    @Query("DELETE FROM mission_logs")
+    suspend fun clearAll()
+}
+

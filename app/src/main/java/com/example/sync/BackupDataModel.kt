@@ -13,7 +13,11 @@ data class BackupPackage(
     val tasks: List<TaskReminderEntity> = emptyList(),
     val transactions: List<FinancialTransactionEntity> = emptyList(),
     val configs: List<WorkplaceConfigEntity> = emptyList(),
-    val profile: UserProfileEntity? = null
+    val profile: UserProfileEntity? = null,
+    val notes: List<NoteEntity> = emptyList(),
+    val leaves: List<LeaveEntity> = emptyList(),
+    val holidays: List<HolidayEntity> = emptyList(),
+    val missions: List<MissionEntity> = emptyList()
 ) {
     fun toJsonString(): String {
         val root = JSONObject()
@@ -66,6 +70,7 @@ data class BackupPackage(
             obj.put("priority", t.priority)
             obj.put("categoryTag", t.categoryTag)
             obj.put("earlyReminderHours", t.earlyReminderHours)
+            obj.put("isEvent", t.isEvent)
             taskArr.put(obj)
         }
         root.put("tasks", taskArr)
@@ -103,6 +108,72 @@ data class BackupPackage(
         }
         root.put("configs", cfgArr)
 
+        // Notes
+        val notesArr = JSONArray()
+        notes.forEach { n ->
+            val obj = JSONObject()
+            obj.put("id", n.id)
+            obj.put("title", n.title)
+            obj.put("content", n.content)
+            obj.put("folder", n.folder)
+            if (n.jalaliDate != null) obj.put("jalaliDate", n.jalaliDate)
+            obj.put("occasionTag", n.occasionTag)
+            obj.put("categoryTag", n.categoryTag)
+            obj.put("updatedAt", n.updatedAt)
+            notesArr.put(obj)
+        }
+        root.put("notes", notesArr)
+
+        // Leaves
+        val leavesArr = JSONArray()
+        leaves.forEach { l ->
+            val obj = JSONObject()
+            obj.put("id", l.id)
+            obj.put("workplace", l.workplace)
+            obj.put("leaveType", l.leaveType)
+            obj.put("jalaliDate", l.jalaliDate)
+            obj.put("startHour", l.startHour)
+            obj.put("startMinute", l.startMinute)
+            obj.put("endHour", l.endHour)
+            obj.put("endMinute", l.endMinute)
+            obj.put("durationMinutes", l.durationMinutes)
+            obj.put("reason", l.reason)
+            obj.put("timestamp", l.timestamp)
+            leavesArr.put(obj)
+        }
+        root.put("leaves", leavesArr)
+
+        // Holidays
+        val holArr = JSONArray()
+        holidays.forEach { h ->
+            val obj = JSONObject()
+            obj.put("id", h.id)
+            obj.put("jalaliDate", h.jalaliDate)
+            obj.put("title", h.title)
+            obj.put("isOffDay", h.isOffDay)
+            holArr.put(obj)
+        }
+        root.put("holidays", holArr)
+
+        // Missions
+        val misArr = JSONArray()
+        missions.forEach { m ->
+            val obj = JSONObject()
+            obj.put("id", m.id)
+            obj.put("workplace", m.workplace)
+            obj.put("title", m.title)
+            obj.put("jalaliDate", m.jalaliDate)
+            obj.put("startHour", m.startHour)
+            obj.put("startMinute", m.startMinute)
+            obj.put("endHour", m.endHour)
+            obj.put("endMinute", m.endMinute)
+            obj.put("durationMinutes", m.durationMinutes)
+            obj.put("description", m.description)
+            obj.put("timestamp", m.timestamp)
+            misArr.put(obj)
+        }
+        root.put("missions", misArr)
+
         // User Profile
         profile?.let { p ->
             val pObj = JSONObject()
@@ -120,6 +191,7 @@ data class BackupPackage(
 
         return root.toString(2)
     }
+
 
     companion object {
         fun fromJsonString(jsonStr: String): BackupPackage {
@@ -252,6 +324,92 @@ data class BackupPackage(
                 )
             }
 
+            // Notes
+            val noteList = mutableListOf<NoteEntity>()
+            val nArr = root.optJSONArray("notes")
+            if (nArr != null) {
+                for (i in 0 until nArr.length()) {
+                    val o = nArr.getJSONObject(i)
+                    noteList.add(
+                        NoteEntity(
+                            id = o.optInt("id", 0),
+                            title = o.optString("title", ""),
+                            content = o.optString("content", ""),
+                            folder = o.optString("folder", "عمومی"),
+                            jalaliDate = if (o.has("jalaliDate")) o.optString("jalaliDate") else null,
+                            occasionTag = o.optString("occasionTag", ""),
+                            categoryTag = o.optString("categoryTag", "#یادداشت"),
+                            updatedAt = o.optLong("updatedAt", System.currentTimeMillis())
+                        )
+                    )
+                }
+            }
+
+            // Leaves
+            val leaveList = mutableListOf<LeaveEntity>()
+            val lArr = root.optJSONArray("leaves")
+            if (lArr != null) {
+                for (i in 0 until lArr.length()) {
+                    val o = lArr.getJSONObject(i)
+                    leaveList.add(
+                        LeaveEntity(
+                            id = o.optInt("id", 0),
+                            workplace = o.optString("workplace", "HOWZEH"),
+                            leaveType = o.optString("leaveType", "HOURLY"),
+                            jalaliDate = o.optString("jalaliDate", ""),
+                            startHour = o.optInt("startHour", 8),
+                            startMinute = o.optInt("startMinute", 0),
+                            endHour = o.optInt("endHour", 12),
+                            endMinute = o.optInt("endMinute", 0),
+                            durationMinutes = o.optInt("durationMinutes", 240),
+                            reason = o.optString("reason", ""),
+                            timestamp = o.optLong("timestamp", System.currentTimeMillis())
+                        )
+                    )
+                }
+            }
+
+            // Holidays
+            val holList = mutableListOf<HolidayEntity>()
+            val hArr = root.optJSONArray("holidays")
+            if (hArr != null) {
+                for (i in 0 until hArr.length()) {
+                    val o = hArr.getJSONObject(i)
+                    holList.add(
+                        HolidayEntity(
+                            id = o.optInt("id", 0),
+                            jalaliDate = o.optString("jalaliDate", ""),
+                            title = o.optString("title", "تعطیل رسمی"),
+                            isOffDay = o.optBoolean("isOffDay", true)
+                        )
+                    )
+                }
+            }
+
+            // Missions
+            val misList = mutableListOf<MissionEntity>()
+            val mArr = root.optJSONArray("missions")
+            if (mArr != null) {
+                for (i in 0 until mArr.length()) {
+                    val o = mArr.getJSONObject(i)
+                    misList.add(
+                        MissionEntity(
+                            id = o.optInt("id", 0),
+                            workplace = o.optString("workplace", "HOWZEH"),
+                            title = o.optString("title", ""),
+                            jalaliDate = o.optString("jalaliDate", ""),
+                            startHour = o.optInt("startHour", 8),
+                            startMinute = o.optInt("startMinute", 0),
+                            endHour = o.optInt("endHour", 12),
+                            endMinute = o.optInt("endMinute", 0),
+                            durationMinutes = o.optInt("durationMinutes", 240),
+                            description = o.optString("description", ""),
+                            timestamp = o.optLong("timestamp", System.currentTimeMillis())
+                        )
+                    )
+                }
+            }
+
             return BackupPackage(
                 version = version,
                 timestamp = timestamp,
@@ -261,7 +419,11 @@ data class BackupPackage(
                 tasks = taskList,
                 transactions = txList,
                 configs = cfgList,
-                profile = profile
+                profile = profile,
+                notes = noteList,
+                leaves = leaveList,
+                holidays = holList,
+                missions = misList
             )
         }
     }

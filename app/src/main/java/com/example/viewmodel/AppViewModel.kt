@@ -53,6 +53,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val profileDao = db.userProfileDao()
     private val noteDao = db.noteDao()
     private val leaveDao = db.leaveDao()
+    private val holidayDao = db.holidayDao()
+    private val missionDao = db.missionDao()
 
     val allPunches = punchDao.getAllPunchLogs().stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
@@ -90,6 +92,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
     )
 
+    val allHolidays = holidayDao.getAllHolidays().stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
+    )
+
+    val allMissions = missionDao.getAllMissions().stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
+    )
+
+
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing = _isSyncing.asStateFlow()
 
@@ -109,6 +120,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val transactions = financialDao.getAllTransactionsOnce()
                 val configs = configDao.getAllConfigsOnce()
                 val profile = profileDao.getUserProfileOnce()
+                val notes = noteDao.getAllNotesOnce()
+                val leaves = leaveDao.getAllLeavesOnce()
+                val holidays = holidayDao.getAllHolidaysOnce()
+                val missions = missionDao.getAllMissionsOnce()
 
                 val backup = BackupPackage(
                     version = 1,
@@ -119,9 +134,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     tasks = tasks,
                     transactions = transactions,
                     configs = configs,
-                    profile = profile
+                    profile = profile,
+                    notes = notes,
+                    leaves = leaves,
+                    holidays = holidays,
+                    missions = missions
                 )
                 MinioSyncClient.uploadBackup(backup.toJsonString())
+
             } catch (e: Exception) {
                 // Silently ignore background periodic upload
             }
@@ -176,8 +196,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val transactions = financialDao.getAllTransactionsOnce()
                     val configs = configDao.getAllConfigsOnce()
                     val profile = profileDao.getUserProfileOnce()
+                    val notes = noteDao.getAllNotesOnce()
+                    val leaves = leaveDao.getAllLeavesOnce()
+                    val holidays = holidayDao.getAllHolidaysOnce()
+                    val missions = missionDao.getAllMissionsOnce()
 
-                    if (punches.isNotEmpty() || activities.isNotEmpty() || transactions.isNotEmpty()) {
+                    if (punches.isNotEmpty() || activities.isNotEmpty() || transactions.isNotEmpty() || notes.isNotEmpty() || leaves.isNotEmpty() || missions.isNotEmpty()) {
                         val backup = BackupPackage(
                             version = 1,
                             timestamp = System.currentTimeMillis(),
@@ -187,10 +211,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             tasks = tasks,
                             transactions = transactions,
                             configs = configs,
-                            profile = profile
+                            profile = profile,
+                            notes = notes,
+                            leaves = leaves,
+                            holidays = holidays,
+                            missions = missions
                         )
                         MinioSyncClient.uploadBackup(backup.toJsonString())
                     }
+
                 } catch (e: Exception) {
                     // Silently ignore background periodic network issues
                 }
@@ -539,6 +568,73 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Holiday Actions
+    fun addHoliday(jalaliDate: String, title: String = "تعطیل رسمی") {
+        viewModelScope.launch {
+            holidayDao.insertHoliday(
+                com.example.data.HolidayEntity(
+                    jalaliDate = jalaliDate,
+                    title = title,
+                    isOffDay = true
+                )
+            )
+            triggerAutoCloudSync()
+        }
+    }
+
+    fun deleteHoliday(holiday: com.example.data.HolidayEntity) {
+        viewModelScope.launch {
+            holidayDao.deleteHoliday(holiday)
+            triggerAutoCloudSync()
+        }
+    }
+
+    // Mission Actions
+    fun addMission(
+        workplace: String,
+        title: String,
+        jalaliDate: String,
+        startHour: Int = 8,
+        startMinute: Int = 0,
+        endHour: Int = 12,
+        endMinute: Int = 0,
+        durationMinutes: Int = 240,
+        description: String = ""
+    ) {
+        viewModelScope.launch {
+            missionDao.insertMission(
+                com.example.data.MissionEntity(
+                    workplace = workplace,
+                    title = title,
+                    jalaliDate = jalaliDate,
+                    startHour = startHour,
+                    startMinute = startMinute,
+                    endHour = endHour,
+                    endMinute = endMinute,
+                    durationMinutes = durationMinutes,
+                    description = description,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            triggerAutoCloudSync()
+        }
+    }
+
+    fun updateMission(mission: com.example.data.MissionEntity) {
+        viewModelScope.launch {
+            missionDao.updateMission(mission)
+            triggerAutoCloudSync()
+        }
+    }
+
+    fun deleteMission(mission: com.example.data.MissionEntity) {
+        viewModelScope.launch {
+            missionDao.deleteMission(mission)
+            triggerAutoCloudSync()
+        }
+    }
+
+
     // Financial Actions
     fun addFinancialTransaction(
         workplace: String,
@@ -630,6 +726,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val transactions = financialDao.getAllTransactionsOnce()
                 val configs = configDao.getAllConfigsOnce()
                 val profile = profileDao.getUserProfileOnce()
+                val notes = noteDao.getAllNotesOnce()
+                val leaves = leaveDao.getAllLeavesOnce()
+                val holidays = holidayDao.getAllHolidaysOnce()
+                val missions = missionDao.getAllMissionsOnce()
 
                 val backup = BackupPackage(
                     version = 1,
@@ -640,7 +740,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     tasks = tasks,
                     transactions = transactions,
                     configs = configs,
-                    profile = profile
+                    profile = profile,
+                    notes = notes,
+                    leaves = leaves,
+                    holidays = holidays,
+                    missions = missions
                 )
                 val jsonString = backup.toJsonString()
                 val result = MinioSyncClient.uploadBackup(jsonString)
@@ -695,6 +799,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         configDao.insertAll(backup.configs)
                     }
 
+                    if (backup.notes.isNotEmpty()) {
+                        noteDao.clearAll()
+                        noteDao.insertAll(backup.notes)
+                    }
+
+                    if (backup.leaves.isNotEmpty()) {
+                        leaveDao.clearAll()
+                        leaveDao.insertAll(backup.leaves)
+                    }
+
+                    if (backup.holidays.isNotEmpty()) {
+                        holidayDao.clearAll()
+                        holidayDao.insertAll(backup.holidays)
+                    }
+
+                    if (backup.missions.isNotEmpty()) {
+                        missionDao.clearAll()
+                        missionDao.insertAll(backup.missions)
+                    }
+
                     backup.profile?.let {
                         profileDao.insertOrUpdateProfile(it.copy(lastSyncTimestamp = System.currentTimeMillis()))
                     }
@@ -702,6 +826,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val msg = "بازیابی اطلاعات از ابر با موفقیت انجام شد (${backup.punches.size} تردد، ${backup.transactions.size} سند مالی)."
                     _syncStatusMessage.value = msg
                     onComplete(true, msg)
+
                 } else {
                     val errMsg = result.exceptionOrNull()?.localizedMessage ?: "خطا در دریافت اطلاعات از سرور MinIO"
                     _syncStatusMessage.value = errMsg
@@ -725,25 +850,189 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Calculates deductions for Howzeh:
-     * - Teaching (تدریس): 60 minutes per session if performed
+     * Calculates deductions for Howzeh/Mosque:
+     * - Teaching (تدریس): 60 minutes per session if performed (or logged duration)
      * - Study for teaching (مطالعه برای تدریس): exact logged duration
+     * - Rest (استراحت): exact logged duration deducted from obligatory presence
      */
-    fun getTeachingAndStudyDeductions(dateStr: String): Pair<Int, Int> {
-        val howzehActivities = allActivities.value.filter { it.workplace == "HOWZEH" && it.jalaliDate == dateStr }
+    data class DayDeductionDetails(
+        val teachingMins: Int = 0,
+        val studyMins: Int = 0,
+        val restMins: Int = 0,
+        val totalDeductionMins: Int = teachingMins + studyMins + restMins
+    )
+
+    fun getDeductionsForDate(dateStr: String, workplace: String = "HOWZEH"): DayDeductionDetails {
+        val workplaceActs = allActivities.value.filter {
+            (it.workplace == workplace || it.workplace == "ALL") && it.jalaliDate == dateStr
+        }
         var teachingMins = 0
         var studyMins = 0
-        for (act in howzehActivities) {
-            val isTeaching = act.categoryTag == "#تدریس" || (act.title.contains("تدریس") && !act.title.contains("مطالعه"))
-            val isStudy = act.categoryTag == "#مطالعه_تدریس" || (act.title.contains("مطالعه") && act.title.contains("تدریس")) || act.categoryTag == "#مطالعه"
+        var restMins = 0
+        for (act in workplaceActs) {
+            val isTeaching = act.categoryTag == "#تدریس" ||
+                    (act.title.contains("تدریس") && !act.title.contains("مطالعه") && !act.title.contains("استراحت"))
+            val isStudy = act.categoryTag == "#مطالعه_تدریس" ||
+                    act.categoryTag == "#مطالعه" ||
+                    (act.title.contains("مطالعه") && act.title.contains("تدریس"))
+            val isRest = act.categoryTag == "#استراحت" || act.title.contains("استراحت")
+
             if (isTeaching) {
-                teachingMins += 60 // تدریس اگر محقق شود یکساعت است
+                teachingMins += if (act.durationMinutes > 0) act.durationMinutes else 60
             } else if (isStudy) {
-                studyMins += act.durationMinutes // مطالعه هم هر چقدر زمانگیر نشان داد
+                studyMins += act.durationMinutes
+            } else if (isRest) {
+                restMins += act.durationMinutes
             }
         }
-        return Pair(teachingMins, studyMins)
+        return DayDeductionDetails(
+            teachingMins = teachingMins,
+            studyMins = studyMins,
+            restMins = restMins
+        )
     }
+
+    fun getTeachingAndStudyDeductions(dateStr: String): Pair<Int, Int> {
+        val details = getDeductionsForDate(dateStr, "HOWZEH")
+        return Pair(details.teachingMins, details.studyMins + details.restMins)
+    }
+
+    data class DayAttendanceCalculation(
+        val jalaliDate: String,
+        val workplace: String,
+        val dayOfWeekName: String,
+        val isFriday: Boolean,
+        val isHoliday: Boolean,
+        val holidayTitle: String?,
+        val grossPresenceMinutes: Long,
+        val teachingDeductionMinutes: Int,
+        val studyDeductionMinutes: Int,
+        val restDeductionMinutes: Int,
+        val totalDeductionMinutes: Int,
+        val leaveMinutes: Long,
+        val missionMinutes: Long,
+        val netEffectiveMinutes: Long,
+        val targetDailyMinutes: Long,
+        val diffMinutes: Long, // positive = overtime, negative = deficit
+        val overtimeMinutes: Long,
+        val deficitMinutes: Long,
+        val firstCheckInTime: String = "-",
+        val lastCheckOutTime: String = "-",
+        val statusText: String = "عادی"
+    )
+
+    fun calculateDayAttendance(
+        dateStr: String,
+        workplace: String,
+        punchesList: List<com.example.data.PunchLogEntity> = allPunches.value,
+        activitiesList: List<com.example.data.ActivityLogEntity> = allActivities.value,
+        leavesList: List<com.example.data.LeaveEntity> = allLeaves.value,
+        missionsList: List<com.example.data.MissionEntity> = allMissions.value,
+        holidaysList: List<com.example.data.HolidayEntity> = allHolidays.value,
+        configsList: List<com.example.data.WorkplaceConfigEntity> = workplaceConfigs.value
+    ): DayAttendanceCalculation {
+        val isFri = com.example.util.JalaliCalendar.isFriday(dateStr)
+        val dayName = com.example.util.JalaliCalendar.getWeekdayName(dateStr)
+        val holiday = holidaysList.find { it.jalaliDate == dateStr && it.isOffDay }
+        val isHol = isFri || (holiday != null)
+        val holTitle = if (isFri) "تعطیل جمعه" else holiday?.title
+
+        val baseTarget = configsList.firstOrNull { it.workplace == workplace }?.targetDailyMinutes?.toLong()
+            ?: if (workplace == "HOWZEH") 240L else 180L
+
+        // جمعه‌ها و روزهای تعطیل ثبت‌شده توقع موظفی ندارند
+        val targetDaily = if (isHol) 0L else baseTarget
+
+        val dayPunches = punchesList.filter { it.workplace == workplace && it.jalaliDate == dateStr }
+        val grossPresence = dayPunches.sumOf { p ->
+            val end = p.checkOutTime ?: System.currentTimeMillis()
+            (end - p.checkInTime) / 60000
+        }
+
+        val dayActs = activitiesList.filter {
+            (it.workplace == workplace || it.workplace == "ALL") && it.jalaliDate == dateStr
+        }
+        var teachingM = 0
+        var studyM = 0
+        var restM = 0
+        for (act in dayActs) {
+            val isTeaching = act.categoryTag == "#تدریس" ||
+                    (act.title.contains("تدریس") && !act.title.contains("مطالعه") && !act.title.contains("استراحت"))
+            val isStudy = act.categoryTag == "#مطالعه_تدریس" ||
+                    act.categoryTag == "#مطالعه" ||
+                    (act.title.contains("مطالعه") && act.title.contains("تدریس"))
+            val isRest = act.categoryTag == "#استراحت" || act.title.contains("استراحت")
+
+            if (isTeaching) {
+                teachingM += if (act.durationMinutes > 0) act.durationMinutes else 60
+            } else if (isStudy) {
+                studyM += act.durationMinutes
+            } else if (isRest) {
+                restM += act.durationMinutes
+            }
+        }
+        val totalDed = teachingM + studyM + restM
+
+        val dayLeaves = leavesList.filter { it.workplace == workplace && it.jalaliDate == dateStr }
+        val leaveM = dayLeaves.sumOf { it.durationMinutes.toLong() }
+
+        val dayMissions = missionsList.filter { it.workplace == workplace && it.jalaliDate == dateStr }
+        val missionM = dayMissions.sumOf { it.durationMinutes.toLong() }
+
+        val netPhysical = maxOf(0L, grossPresence - totalDed)
+        val netEffective = netPhysical + leaveM + missionM
+        val diff = netEffective - targetDaily
+        val overtime = if (diff > 0L) diff else 0L
+        val deficit = if (diff < 0L) -diff else 0L
+
+        val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        val earliestPunch = dayPunches.minByOrNull { it.checkInTime }
+        val activePunch = dayPunches.find { it.checkOutTime == null }
+        val latestPunchWithCheckout = dayPunches.filter { it.checkOutTime != null }.maxByOrNull { it.checkOutTime ?: 0L }
+
+        val firstInStr = earliestPunch?.let { timeFmt.format(java.util.Date(it.checkInTime)) }
+            ?: if (leaveM > 0 || missionM > 0) "مرخصی/مأموریت" else "-"
+
+        val lastOutStr = when {
+            activePunch != null -> "در حال حضور"
+            latestPunchWithCheckout?.checkOutTime != null -> timeFmt.format(java.util.Date(latestPunchWithCheckout.checkOutTime!!))
+            leaveM > 0 || missionM > 0 -> "پایان مأموریت/مرخصی"
+            else -> "-"
+        }
+
+        val status = when {
+            isHol -> holTitle ?: "تعطیل"
+            diff > 0 -> "مازاد (+${overtime / 60}س ${overtime % 60}د)"
+            diff < 0 -> "کسری (-${deficit / 60}س ${deficit % 60}د)"
+            targetDaily > 0 -> "تکمیل موظفی"
+            else -> "عادی"
+        }
+
+        return DayAttendanceCalculation(
+            jalaliDate = dateStr,
+            workplace = workplace,
+            dayOfWeekName = dayName,
+            isFriday = isFri,
+            isHoliday = isHol,
+            holidayTitle = holTitle,
+            grossPresenceMinutes = grossPresence,
+            teachingDeductionMinutes = teachingM,
+            studyDeductionMinutes = studyM,
+            restDeductionMinutes = restM,
+            totalDeductionMinutes = totalDed,
+            leaveMinutes = leaveM,
+            missionMinutes = missionM,
+            netEffectiveMinutes = netEffective,
+            targetDailyMinutes = targetDaily,
+            diffMinutes = diff,
+            overtimeMinutes = overtime,
+            deficitMinutes = deficit,
+            firstCheckInTime = firstInStr,
+            lastCheckOutTime = lastOutStr,
+            statusText = status
+        )
+    }
+
 
     // AI Assistant Thinking State
     private val _aiMessages = MutableStateFlow<List<AiChatMessage>>(
