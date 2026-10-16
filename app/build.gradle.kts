@@ -64,6 +64,16 @@ android {
   }
 }
 
+// Ensure .env and .env.example exist so Secrets Gradle Plugin never fails on fresh clone
+val envExampleFile = rootProject.file(".env.example")
+if (!envExampleFile.exists()) {
+  envExampleFile.writeText("GEMINI_API_KEY=\nMINIO_ENDPOINT=\nMINIO_ACCESS_KEY_ID=\nMINIO_SECRET_ACCESS_KEY=\nMINIO_BUCKET=\nMINIO_PREFIX=\n")
+}
+val envFile = rootProject.file(".env")
+if (!envFile.exists()) {
+  envFile.writeText("GEMINI_API_KEY=\nMINIO_ENDPOINT=\nMINIO_ACCESS_KEY_ID=\nMINIO_SECRET_ACCESS_KEY=\nMINIO_BUCKET=\nMINIO_PREFIX=\n")
+}
+
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.
 secrets {
